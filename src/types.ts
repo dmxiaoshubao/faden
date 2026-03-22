@@ -28,6 +28,34 @@ export interface FadenState {
   aliases: Record<string, FadenAliasEntry>
 }
 
+export interface FileStamp {
+  mtimeMs: number
+  size: number
+}
+
+export interface CachedSessionRecord {
+  agent: AgentName
+  sessionId: string
+  cwd: string
+  title: string | null
+  updatedAt: string
+  messageCount: number
+  sourceFile: string
+  indexFile?: string
+  gitBranch?: string | null
+}
+
+export interface SessionCacheEntry {
+  record: CachedSessionRecord
+  sourceStat: FileStamp
+  indexStat?: FileStamp | null
+}
+
+export interface SessionCacheFile {
+  version: number
+  entries: Record<string, SessionCacheEntry>
+}
+
 export interface CodexSessionIndexEntry {
   id: string
   thread_name?: string

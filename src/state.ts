@@ -2,10 +2,15 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
-import type { AgentName, FadenState } from "./types"
+import type { AgentName, FadenState, SessionCacheFile } from "./types"
 
 const EMPTY_STATE: FadenState = {
   aliases: {},
+}
+
+const EMPTY_SESSION_CACHE: SessionCacheFile = {
+  version: 1,
+  entries: {},
 }
 
 function defaultConfigDir(): string {
@@ -32,6 +37,10 @@ function getStateFilePath(): string {
   return path.join(getStateDir(), "state.json")
 }
 
+function getSessionCacheFilePath(): string {
+  return path.join(getStateDir(), "session-cache.json")
+}
+
 function aliasKey(agent: AgentName, sessionId: string): string {
   return `${agent}:${sessionId}`
 }
@@ -53,6 +62,24 @@ export async function loadState(): Promise<FadenState> {
   }
 }
 
+export async function loadSessionCache(): Promise<SessionCacheFile> {
+  const filePath = getSessionCacheFilePath()
+  try {
+    const raw = await fs.readFile(filePath, "utf8")
+    const parsed = JSON.parse(raw) as Partial<SessionCacheFile>
+    return {
+      version: parsed.version ?? EMPTY_SESSION_CACHE.version,
+      entries: parsed.entries ?? {},
+    }
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException
+    if (nodeError.code === "ENOENT") {
+      return { ...EMPTY_SESSION_CACHE }
+    }
+    throw error
+  }
+}
+
 async function atomicWrite(filePath: string, content: string): Promise<void> {
   const dirPath = path.dirname(filePath)
   await fs.mkdir(dirPath, { recursive: true })
@@ -67,6 +94,11 @@ async function atomicWrite(filePath: string, content: string): Promise<void> {
 export async function saveState(state: FadenState): Promise<void> {
   const filePath = getStateFilePath()
   await atomicWrite(filePath, JSON.stringify(state, null, 2))
+}
+
+export async function saveSessionCache(cache: SessionCacheFile): Promise<void> {
+  const filePath = getSessionCacheFilePath()
+  await atomicWrite(filePath, JSON.stringify(cache, null, 2))
 }
 
 export function getAlias(

@@ -3,11 +3,9 @@ import os from "node:os"
 import path from "node:path"
 
 import { pathExists } from "../fs-utils"
-import { getAlias } from "../state"
 import type {
+  CachedSessionRecord,
   ClaudeSessionIndexEntry,
-  FadenState,
-  SessionRecord,
 } from "../types"
 import { cleanText, safeJsonParse, toIsoDate, truncate } from "./shared"
 
@@ -23,7 +21,7 @@ interface ClaudeSummaryDraft {
 const SYSTEM_TAG_REGEX =
   /<system-reminder>[\s\S]*?<\/system-reminder>|<local-command-caveat>[\s\S]*?<\/local-command-caveat>|<command-name>[\s\S]*?<\/command-name>|<command-message>[\s\S]*?<\/command-message>|<command-args>[\s\S]*?<\/command-args>|<local-command-stdout>[\s\S]*?<\/local-command-stdout>|<user-prompt-submit-hook>[\s\S]*?<\/user-prompt-submit-hook>/g
 
-function getClaudeProjectsDir(): string {
+export function getClaudeProjectsDir(): string {
   const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude")
   return path.join(configDir, "projects")
 }
@@ -133,7 +131,7 @@ export function parseClaudeSummaryFromLines(lines: string[]): ClaudeSummaryDraft
   return draft
 }
 
-async function loadClaudeSessionIndex(
+export async function loadClaudeSessionIndex(
   projectDir: string,
 ): Promise<Map<string, ClaudeSessionIndexEntry> | undefined> {
   const indexPath = path.join(projectDir, "sessions-index.json")
@@ -150,14 +148,19 @@ async function loadClaudeSessionIndex(
   return new Map(parsed.entries.map((entry) => [entry.sessionId, entry]))
 }
 
-export async function loadClaudeSessions(state: FadenState): Promise<SessionRecord[]> {
+export interface ClaudeSessionFileInfo {
+  sourceFile: string
+  indexFile?: string
+}
+
+export async function listClaudeSessionFiles(): Promise<ClaudeSessionFileInfo[]> {
   const baseDir = getClaudeProjectsDir()
   if (!(await pathExists(baseDir))) {
     return []
   }
 
   const projectEntries = await fs.readdir(baseDir, { withFileTypes: true })
-  const sessions: SessionRecord[] = []
+  const files: ClaudeSessionFileInfo[] = []
 
   for (const entry of projectEntries) {
     if (!entry.isDirectory()) {
@@ -165,52 +168,63 @@ export async function loadClaudeSessions(state: FadenState): Promise<SessionReco
     }
 
     const projectDir = path.join(baseDir, entry.name)
-    const indexMap = await loadClaudeSessionIndex(projectDir)
-    const files = await fs.readdir(projectDir, { withFileTypes: true })
+    const indexFile = path.join(projectDir, "sessions-index.json")
+    const hasIndexFile = await pathExists(indexFile)
+    const projectFiles = await fs.readdir(projectDir, { withFileTypes: true })
 
-    for (const file of files) {
+    for (const file of projectFiles) {
       if (!file.isFile() || !file.name.endsWith(".jsonl")) {
         continue
       }
 
-      const filePath = path.join(projectDir, file.name)
-      const raw = await fs.readFile(filePath, "utf8")
-      const summary = parseClaudeSummaryFromLines(raw.split(/\r?\n/))
-      if (!summary) {
-        continue
-      }
-
-      const sessionId = summary.sessionId as string
-      const updatedAt = summary.updatedAt as string
-      const indexEntry = indexMap?.get(sessionId)
-      const indexedSummary = cleanText(indexEntry?.summary ?? "")
-      const indexedTitle =
-        indexedSummary && indexedSummary !== "New Conversation"
-          ? indexedSummary
-          : cleanText(indexEntry?.firstPrompt ?? "")
-      const cwd =
-        summary.cwd ??
-        cleanText(indexEntry?.projectPath ?? "") ??
-        decodeProjectDirName(entry.name)
-
-      const title =
-        indexedTitle ??
-        cleanText(summary.title ?? "")
-
-      sessions.push({
-        agent: "claude",
-        sessionId,
-        cwd,
-        title,
-        alias: getAlias(state, "claude", sessionId),
-        updatedAt: toIsoDate(indexEntry?.modified) ?? updatedAt,
-        messageCount: indexEntry?.messageCount ?? summary.messageCount,
-        sourceFile: filePath,
-        indexFile: indexMap ? path.join(projectDir, "sessions-index.json") : undefined,
-        gitBranch: cleanText(indexEntry?.gitBranch ?? "") ?? summary.gitBranch,
+      files.push({
+        sourceFile: path.join(projectDir, file.name),
+        indexFile: hasIndexFile ? indexFile : undefined,
       })
     }
   }
 
-  return sessions
+  return files
+}
+
+export async function parseClaudeSessionFile(
+  filePath: string,
+  indexMap?: Map<string, ClaudeSessionIndexEntry>,
+): Promise<CachedSessionRecord | null> {
+  const raw = await fs.readFile(filePath, "utf8")
+  const summary = parseClaudeSummaryFromLines(raw.split(/\r?\n/))
+  if (!summary) {
+    return null
+  }
+
+  const projectDir = path.dirname(filePath)
+  const projectName = path.basename(projectDir)
+  const sessionId = summary.sessionId as string
+  const updatedAt = summary.updatedAt as string
+  const indexEntry = indexMap?.get(sessionId)
+  const indexedSummary = cleanText(indexEntry?.summary ?? "")
+  const indexedTitle =
+    indexedSummary && indexedSummary !== "New Conversation"
+      ? indexedSummary
+      : cleanText(indexEntry?.firstPrompt ?? "")
+  const cwd =
+    summary.cwd ??
+    cleanText(indexEntry?.projectPath ?? "") ??
+    decodeProjectDirName(projectName)
+
+  const title =
+    indexedTitle ??
+    cleanText(summary.title ?? "")
+
+  return {
+    agent: "claude",
+    sessionId,
+    cwd,
+    title,
+    updatedAt: toIsoDate(indexEntry?.modified) ?? updatedAt,
+    messageCount: indexEntry?.messageCount ?? summary.messageCount,
+    sourceFile: filePath,
+    indexFile: indexMap ? path.join(projectDir, "sessions-index.json") : undefined,
+    gitBranch: cleanText(indexEntry?.gitBranch ?? "") ?? summary.gitBranch,
+  }
 }

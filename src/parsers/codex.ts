@@ -3,11 +3,9 @@ import os from "node:os"
 import path from "node:path"
 
 import { walkFiles, pathExists } from "../fs-utils"
-import { getAlias } from "../state"
 import type {
+  CachedSessionRecord,
   CodexSessionIndexEntry,
-  FadenState,
-  SessionRecord,
 } from "../types"
 import { cleanText, safeJsonParse, toIsoDate, truncate } from "./shared"
 
@@ -20,8 +18,16 @@ interface CodexSummaryDraft {
   messageCount: number
 }
 
-function getCodexHome(): string {
+export function getCodexHome(): string {
   return process.env.CODEX_HOME || path.join(os.homedir(), ".codex")
+}
+
+export function getCodexSessionsDir(): string {
+  return path.join(getCodexHome(), "sessions")
+}
+
+export function getCodexIndexPath(): string {
+  return path.join(getCodexHome(), "session_index.jsonl")
 }
 
 function extractCodexTitleCandidate(input: string): string | null {
@@ -132,7 +138,7 @@ export function parseCodexSummaryFromLines(lines: string[]): CodexSummaryDraft |
 export async function loadCodexIndex(): Promise<
   Map<string, CodexSessionIndexEntry> | undefined
 > {
-  const indexPath = path.join(getCodexHome(), "session_index.jsonl")
+  const indexPath = getCodexIndexPath()
   if (!(await pathExists(indexPath))) {
     return undefined
   }
@@ -150,48 +156,45 @@ export async function loadCodexIndex(): Promise<
   return map
 }
 
-export async function loadCodexSessions(state: FadenState): Promise<SessionRecord[]> {
-  const baseDir = path.join(getCodexHome(), "sessions")
+export async function listCodexSessionFiles(): Promise<string[]> {
+  const baseDir = getCodexSessionsDir()
   if (!(await pathExists(baseDir))) {
     return []
   }
 
-  const indexMap = await loadCodexIndex()
   const files = await walkFiles(baseDir)
-  const sessionFiles = files.filter((filePath) => {
+  return files.filter((filePath) => {
     return path.basename(filePath).startsWith("rollout-") && filePath.endsWith(".jsonl")
   })
+}
 
-  const sessions: SessionRecord[] = []
-
-  for (const filePath of sessionFiles) {
-    const raw = await fs.readFile(filePath, "utf8")
-    const summary = parseCodexSummaryFromLines(raw.split(/\r?\n/))
-    if (!summary) {
-      continue
-    }
-
-    const sessionId = summary.sessionId as string
-    const cwd = summary.cwd as string
-    const updatedAt = summary.updatedAt as string
-    const indexEntry = indexMap?.get(sessionId)
-    const title =
-      cleanText(indexEntry?.thread_name ?? "") ??
-      cleanText(summary.title ?? "")
-
-    sessions.push({
-      agent: "codex",
-      sessionId,
-      cwd,
-      title,
-      alias: getAlias(state, "codex", sessionId),
-      updatedAt: toIsoDate(indexEntry?.updated_at) ?? updatedAt,
-      messageCount: summary.messageCount,
-      sourceFile: filePath,
-      indexFile: indexMap ? path.join(getCodexHome(), "session_index.jsonl") : undefined,
-      gitBranch: summary.gitBranch,
-    })
+export async function parseCodexSessionFile(
+  filePath: string,
+  indexMap?: Map<string, CodexSessionIndexEntry>,
+): Promise<CachedSessionRecord | null> {
+  const raw = await fs.readFile(filePath, "utf8")
+  const summary = parseCodexSummaryFromLines(raw.split(/\r?\n/))
+  if (!summary) {
+    return null
   }
 
-  return sessions
+  const sessionId = summary.sessionId as string
+  const cwd = summary.cwd as string
+  const updatedAt = summary.updatedAt as string
+  const indexEntry = indexMap?.get(sessionId)
+  const title =
+    cleanText(indexEntry?.thread_name ?? "") ??
+    cleanText(summary.title ?? "")
+
+  return {
+    agent: "codex",
+    sessionId,
+    cwd,
+    title,
+    updatedAt: toIsoDate(indexEntry?.updated_at) ?? updatedAt,
+    messageCount: summary.messageCount,
+    sourceFile: filePath,
+    indexFile: indexMap ? getCodexIndexPath() : undefined,
+    gitBranch: summary.gitBranch,
+  }
 }
