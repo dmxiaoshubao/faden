@@ -63,6 +63,7 @@ export async function selectItem<T>(
     const cleanup = () => {
       process.stdin.setRawMode(false)
       process.stdin.off("keypress", onKeyPress)
+      process.stdin.pause()
       showCursor()
       clearScreen()
     }
@@ -97,6 +98,7 @@ export async function selectItem<T>(
     }
 
     readline.emitKeypressEvents(process.stdin)
+    process.stdin.resume()
     process.stdin.setRawMode(true)
     hideCursor()
     render()

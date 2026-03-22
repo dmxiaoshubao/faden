@@ -9,6 +9,10 @@ const EMPTY_STATE: FadenState = {
 }
 
 function defaultConfigDir(): string {
+  if (process.env.FADEN_CONFIG_DIR) {
+    return process.env.FADEN_CONFIG_DIR
+  }
+
   if (process.platform === "win32") {
     return process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
   }
