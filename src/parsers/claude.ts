@@ -7,7 +7,13 @@ import type {
   CachedSessionRecord,
   ClaudeSessionIndexEntry,
 } from "../types"
-import { cleanText, safeJsonParse, toIsoDate, truncate } from "./shared"
+import {
+  cleanText,
+  readFileLines,
+  safeJsonParse,
+  toIsoDate,
+  truncate,
+} from "./shared"
 
 interface ClaudeSummaryDraft {
   sessionId: string | null
@@ -64,7 +70,17 @@ function extractClaudeUserText(message: unknown): string | null {
 }
 
 export function parseClaudeSummaryFromLines(lines: string[]): ClaudeSummaryDraft | null {
-  const draft: ClaudeSummaryDraft = {
+  const draft = createClaudeSummaryDraft()
+
+  for (const line of lines) {
+    updateClaudeSummaryDraft(draft, line)
+  }
+
+  return finalizeClaudeSummary(draft)
+}
+
+function createClaudeSummaryDraft(): ClaudeSummaryDraft {
+  return {
     sessionId: null,
     cwd: null,
     title: null,
@@ -72,63 +88,80 @@ export function parseClaudeSummaryFromLines(lines: string[]): ClaudeSummaryDraft
     gitBranch: null,
     messageCount: 0,
   }
+}
 
-  for (const line of lines) {
-    const value = safeJsonParse<Record<string, unknown>>(line)
-    if (!value) {
-      continue
-    }
-
-    const type = typeof value.type === "string" ? value.type : ""
-    if (type === "file-history-snapshot" || type === "progress") {
-      continue
-    }
-
-    if (value.isMeta === true) {
-      continue
-    }
-
-    if (!draft.sessionId && typeof value.sessionId === "string") {
-      draft.sessionId = value.sessionId
-    }
-    if (!draft.cwd && typeof value.cwd === "string") {
-      draft.cwd = value.cwd
-    }
-    if (!draft.gitBranch && typeof value.gitBranch === "string") {
-      draft.gitBranch = value.gitBranch
-    }
-
-    const timestamp = typeof value.timestamp === "string" ? toIsoDate(value.timestamp) : null
-    if (timestamp) {
-      draft.updatedAt = timestamp
-    }
-
-    if (type === "user" || type === "assistant") {
-      if (
-        type === "assistant" &&
-        value.message &&
-        typeof value.message === "object" &&
-        (value.message as { model?: unknown }).model === "<synthetic>"
-      ) {
-        continue
-      }
-
-      draft.messageCount += 1
-
-      if (type === "user" && !draft.title) {
-        const text = extractClaudeUserText(value.message)
-        if (text) {
-          draft.title = truncate(text.replace(/\s+/g, " "), 100)
-        }
-      }
-    }
-  }
-
+function finalizeClaudeSummary(
+  draft: ClaudeSummaryDraft,
+): ClaudeSummaryDraft | null {
   if (!draft.sessionId || !draft.updatedAt) {
     return null
   }
 
   return draft
+}
+
+function updateClaudeSummaryDraft(
+  draft: ClaudeSummaryDraft,
+  line: string,
+): void {
+  const value = safeJsonParse<Record<string, unknown>>(line)
+  if (!value) {
+    return
+  }
+
+  const type = typeof value.type === "string" ? value.type : ""
+  if (type === "file-history-snapshot" || type === "progress") {
+    return
+  }
+
+  if (value.isMeta === true) {
+    return
+  }
+
+  if (!draft.sessionId && typeof value.sessionId === "string") {
+    draft.sessionId = value.sessionId
+  }
+  if (!draft.cwd && typeof value.cwd === "string") {
+    draft.cwd = value.cwd
+  }
+  if (!draft.gitBranch && typeof value.gitBranch === "string") {
+    draft.gitBranch = value.gitBranch
+  }
+
+  const timestamp = typeof value.timestamp === "string" ? toIsoDate(value.timestamp) : null
+  if (timestamp) {
+    draft.updatedAt = timestamp
+  }
+
+  if (type === "user" || type === "assistant") {
+    if (
+      type === "assistant" &&
+      value.message &&
+      typeof value.message === "object" &&
+      (value.message as { model?: unknown }).model === "<synthetic>"
+    ) {
+      return
+    }
+
+    draft.messageCount += 1
+
+    if (type === "user" && !draft.title) {
+      const text = extractClaudeUserText(value.message)
+      if (text) {
+        draft.title = truncate(text.replace(/\s+/g, " "), 100)
+      }
+    }
+  }
+}
+
+async function parseClaudeSummaryFromFile(
+  filePath: string,
+): Promise<ClaudeSummaryDraft | null> {
+  const draft = createClaudeSummaryDraft()
+  await readFileLines(filePath, (line) => {
+    updateClaudeSummaryDraft(draft, line)
+  })
+  return finalizeClaudeSummary(draft)
 }
 
 export async function loadClaudeSessionIndex(
@@ -191,8 +224,7 @@ export async function parseClaudeSessionFile(
   filePath: string,
   indexMap?: Map<string, ClaudeSessionIndexEntry>,
 ): Promise<CachedSessionRecord | null> {
-  const raw = await fs.readFile(filePath, "utf8")
-  const summary = parseClaudeSummaryFromLines(raw.split(/\r?\n/))
+  const summary = await parseClaudeSummaryFromFile(filePath)
   if (!summary) {
     return null
   }

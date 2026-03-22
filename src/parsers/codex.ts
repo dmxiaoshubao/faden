@@ -1,4 +1,3 @@
-import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -7,7 +6,13 @@ import type {
   CachedSessionRecord,
   CodexSessionIndexEntry,
 } from "../types"
-import { cleanText, safeJsonParse, toIsoDate, truncate } from "./shared"
+import {
+  cleanText,
+  readFileLines,
+  safeJsonParse,
+  toIsoDate,
+  truncate,
+} from "./shared"
 
 interface CodexSummaryDraft {
   sessionId: string | null
@@ -63,8 +68,8 @@ function extractResponseText(payload: Record<string, unknown>): string | null {
   return null
 }
 
-export function parseCodexSummaryFromLines(lines: string[]): CodexSummaryDraft | null {
-  const draft: CodexSummaryDraft = {
+function createCodexSummaryDraft(): CodexSummaryDraft {
+  return {
     sessionId: null,
     cwd: null,
     title: null,
@@ -72,67 +77,92 @@ export function parseCodexSummaryFromLines(lines: string[]): CodexSummaryDraft |
     gitBranch: null,
     messageCount: 0,
   }
+}
 
-  for (const line of lines) {
-    const value = safeJsonParse<Record<string, unknown>>(line)
-    if (!value) {
-      continue
-    }
-
-    const timestamp = typeof value.timestamp === "string" ? toIsoDate(value.timestamp) : null
-    if (timestamp) {
-      draft.updatedAt = timestamp
-    }
-
-    const type = typeof value.type === "string" ? value.type : ""
-    if (type === "session_meta" && value.payload && typeof value.payload === "object") {
-      const payload = value.payload as Record<string, unknown>
-      if (typeof payload.id === "string") {
-        draft.sessionId = payload.id
-      }
-      if (typeof payload.cwd === "string") {
-        draft.cwd = payload.cwd
-      }
-      if (payload.git && typeof payload.git === "object") {
-        const git = payload.git as Record<string, unknown>
-        if (typeof git.branch === "string") {
-          draft.gitBranch = git.branch
-        }
-      }
-      continue
-    }
-
-    if (type === "event_msg" && value.payload && typeof value.payload === "object") {
-      const payload = value.payload as Record<string, unknown>
-      const payloadType = typeof payload.type === "string" ? payload.type : ""
-      if (payloadType === "user_message") {
-        draft.messageCount += 1
-        if (!draft.title && typeof payload.message === "string") {
-          draft.title = extractCodexTitleCandidate(payload.message)
-        }
-      } else if (payloadType === "agent_message") {
-        draft.messageCount += 1
-      }
-      continue
-    }
-
-    if (type === "response_item" && value.payload && typeof value.payload === "object") {
-      const payload = value.payload as Record<string, unknown>
-      if (
-        !draft.title &&
-        payload.type === "message" &&
-        payload.role === "user"
-      ) {
-        draft.title = extractCodexTitleCandidate(extractResponseText(payload) ?? "")
-      }
-    }
-  }
-
+function finalizeCodexSummary(draft: CodexSummaryDraft): CodexSummaryDraft | null {
   if (!draft.sessionId || !draft.cwd || !draft.updatedAt) {
     return null
   }
 
   return draft
+}
+
+function updateCodexSummaryDraft(
+  draft: CodexSummaryDraft,
+  line: string,
+): void {
+  const value = safeJsonParse<Record<string, unknown>>(line)
+  if (!value) {
+    return
+  }
+
+  const timestamp = typeof value.timestamp === "string" ? toIsoDate(value.timestamp) : null
+  if (timestamp) {
+    draft.updatedAt = timestamp
+  }
+
+  const type = typeof value.type === "string" ? value.type : ""
+  if (type === "session_meta" && value.payload && typeof value.payload === "object") {
+    const payload = value.payload as Record<string, unknown>
+    if (typeof payload.id === "string") {
+      draft.sessionId = payload.id
+    }
+    if (typeof payload.cwd === "string") {
+      draft.cwd = payload.cwd
+    }
+    if (payload.git && typeof payload.git === "object") {
+      const git = payload.git as Record<string, unknown>
+      if (typeof git.branch === "string") {
+        draft.gitBranch = git.branch
+      }
+    }
+    return
+  }
+
+  if (type === "event_msg" && value.payload && typeof value.payload === "object") {
+    const payload = value.payload as Record<string, unknown>
+    const payloadType = typeof payload.type === "string" ? payload.type : ""
+    if (payloadType === "user_message") {
+      draft.messageCount += 1
+      if (!draft.title && typeof payload.message === "string") {
+        draft.title = extractCodexTitleCandidate(payload.message)
+      }
+    } else if (payloadType === "agent_message") {
+      draft.messageCount += 1
+    }
+    return
+  }
+
+  if (type === "response_item" && value.payload && typeof value.payload === "object") {
+    const payload = value.payload as Record<string, unknown>
+    if (
+      !draft.title &&
+      payload.type === "message" &&
+      payload.role === "user"
+    ) {
+      draft.title = extractCodexTitleCandidate(extractResponseText(payload) ?? "")
+    }
+  }
+}
+
+export function parseCodexSummaryFromLines(lines: string[]): CodexSummaryDraft | null {
+  const draft = createCodexSummaryDraft()
+
+  for (const line of lines) {
+    updateCodexSummaryDraft(draft, line)
+  }
+
+  return finalizeCodexSummary(draft)
+}
+
+async function parseCodexSummaryFromFile(
+  filePath: string,
+): Promise<CodexSummaryDraft | null> {
+  const draft = createCodexSummaryDraft()
+  await readFileLines(filePath, (line) => {
+    updateCodexSummaryDraft(draft, line)
+  })
+  return finalizeCodexSummary(draft)
 }
 
 export async function loadCodexIndex(): Promise<
@@ -143,15 +173,13 @@ export async function loadCodexIndex(): Promise<
     return undefined
   }
 
-  const raw = await fs.readFile(indexPath, "utf8")
   const map = new Map<string, CodexSessionIndexEntry>()
-
-  for (const line of raw.split(/\r?\n/)) {
+  await readFileLines(indexPath, (line) => {
     const entry = safeJsonParse<CodexSessionIndexEntry>(line)
     if (entry?.id) {
       map.set(entry.id, entry)
     }
-  }
+  })
 
   return map
 }
@@ -172,8 +200,7 @@ export async function parseCodexSessionFile(
   filePath: string,
   indexMap?: Map<string, CodexSessionIndexEntry>,
 ): Promise<CachedSessionRecord | null> {
-  const raw = await fs.readFile(filePath, "utf8")
-  const summary = parseCodexSummaryFromLines(raw.split(/\r?\n/))
+  const summary = await parseCodexSummaryFromFile(filePath)
   if (!summary) {
     return null
   }
