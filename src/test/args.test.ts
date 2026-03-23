@@ -48,6 +48,31 @@ test("parseCliArgs accepts positional agent for resume", () => {
   })
 })
 
+test("parseCliArgs accepts alias set with positional agent", () => {
+  assert.deepEqual(parseCliArgs(["alias", "set", "codex", "-k", "demo", "new-name"]), {
+    type: "alias",
+    options: {
+      action: "set",
+      includeAll: false,
+      agent: "codex",
+      key: "demo",
+      name: "new-name",
+    },
+  })
+})
+
+test("parseCliArgs accepts alias clear", () => {
+  assert.deepEqual(parseCliArgs(["alias", "clear", "claude", "-a", "-k", "demo"]), {
+    type: "alias",
+    options: {
+      action: "clear",
+      includeAll: true,
+      agent: "claude",
+      key: "demo",
+    },
+  })
+})
+
 test("renderHelp shows both short and long resume options", () => {
   const output = renderHelp("resume")
   assert.match(output, /-a, --all/)
@@ -60,6 +85,13 @@ test("renderHelp shows remove option descriptions", () => {
   const output = renderHelp("remove")
   assert.match(output, /不按当前目录过滤/)
   assert.match(output, /与 --all 互斥/)
+})
+
+test("renderHelp shows alias command usage", () => {
+  const output = renderHelp("alias")
+  assert.match(output, /faden alias set/)
+  assert.match(output, /faden alias clear/)
+  assert.match(output, /Set or update a local alias/)
 })
 
 test("renderHelp includes English descriptions after Chinese text", () => {

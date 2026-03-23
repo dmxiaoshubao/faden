@@ -94,3 +94,12 @@ export interface RemoveCommandOptions {
   path?: string
   key?: string
 }
+
+export interface AliasCommandOptions {
+  action: "set" | "clear"
+  includeAll: boolean
+  agent?: AgentName
+  path?: string
+  key?: string
+  name?: string
+}

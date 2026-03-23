@@ -1,17 +1,19 @@
 import type {
   AddCommandOptions,
   AgentName,
+  AliasCommandOptions,
   RemoveCommandOptions,
   ResumeCommandOptions,
 } from "./types"
 
-export type CommandName = "add" | "resume" | "remove"
+export type CommandName = "add" | "resume" | "remove" | "alias"
 
 type ParsedCommand =
   | { type: "help"; command?: CommandName }
   | { type: "add"; options: AddCommandOptions }
   | { type: "resume"; options: ResumeCommandOptions }
   | { type: "remove"; options: RemoveCommandOptions }
+  | { type: "alias"; options: AliasCommandOptions }
 
 function splitPassthrough(argv: string[]): { head: string[]; passthrough: string[] } {
   const separatorIndex = argv.indexOf("--")
@@ -114,13 +116,53 @@ function parseRemoveArgs(argv: string[]): RemoveCommandOptions {
   }
 }
 
+function parseAliasArgs(argv: string[]): AliasCommandOptions {
+  const [action, ...rest] = argv
+  if (action !== "set" && action !== "clear") {
+    throw new Error("alias 命令只支持 set 或 clear")
+  }
+
+  let name: string | undefined
+  const argsForFilter = [...rest]
+  if (action === "set") {
+    if (argsForFilter.length === 0) {
+      throw new Error("alias set 缺少别名名称")
+    }
+    name = argsForFilter.pop()
+    if (!name || name.startsWith("-")) {
+      throw new Error("alias set 缺少别名名称")
+    }
+  }
+
+  const parsed = parseRemoveArgs(argsForFilter)
+  const options: AliasCommandOptions = {
+    action,
+    includeAll: parsed.includeAll,
+  }
+
+  if (parsed.agent) {
+    options.agent = parsed.agent
+  }
+  if (parsed.path) {
+    options.path = parsed.path
+  }
+  if (parsed.key) {
+    options.key = parsed.key
+  }
+  if (name !== undefined) {
+    options.name = name
+  }
+
+  return options
+}
+
 function hasHelpFlag(argv: string[]): boolean {
   const { head } = splitPassthrough(argv)
   return head.includes("--help") || head.includes("-h")
 }
 
 function parseCommandName(input: string): CommandName {
-  if (input === "add" || input === "resume" || input === "remove") {
+  if (input === "add" || input === "resume" || input === "remove" || input === "alias") {
     return input
   }
   throw new Error(`未知命令: ${input}`)
@@ -159,6 +201,13 @@ export function parseCliArgs(argv: string[]): ParsedCommand {
       return { type: "help", command }
     }
     return { type: "remove", options: parseRemoveArgs(rest) }
+  }
+
+  if (command === "alias") {
+    if (hasHelpFlag(rest)) {
+      return { type: "help", command }
+    }
+    return { type: "alias", options: parseAliasArgs(rest) }
   }
 
   throw new Error(`未知命令: ${command}`)

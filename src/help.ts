@@ -12,6 +12,7 @@ function formatGeneralHelp(): string {
   add       新建会话并可选绑定别名 / Create a session and optionally bind an alias
   resume    选择并恢复已有会话 / Select and resume an existing session
   remove    选择并删除已有会话 / Select and remove an existing session
+  alias     为已有会话设置或清除本地别名 / Set or clear a local alias for an existing session
   help      查看总帮助或子命令帮助 / Show general help or command help
 
 更多 / More:
@@ -68,6 +69,26 @@ function formatRemoveHelp(): string {
 `
 }
 
+function formatAliasHelp(): string {
+  return `faden alias
+
+用法 / Usage:
+  faden alias set [codex|claude] [-a] [-k key] [-p path] <name>
+  faden alias clear [codex|claude] [-a] [-k key] [-p path]
+
+参数 / Arguments:
+  set                    为选中的会话设置或更新本地别名 / Set or update a local alias for the selected session
+  clear                  清除选中会话的本地别名 / Clear the local alias for the selected session
+  codex|claude           仅列出指定 agent 的会话 / Only list sessions for the selected agent
+  <name>                 要设置的别名 / Alias name to apply
+
+选项 / Options:
+  -a, --all              不按当前目录过滤，列出所有会话 / List all sessions without filtering by cwd
+  -k, --key <key>        按别名、标题或会话 ID 过滤 / Filter by alias, title, or session ID
+  -p, --path <path>      仅列出指定目录的会话，与 --all 互斥 / Only list sessions for the given path, mutually exclusive with --all
+`
+}
+
 export function renderHelp(command?: CommandName): string {
   if (command === "add") {
     return formatAddHelp()
@@ -77,6 +98,9 @@ export function renderHelp(command?: CommandName): string {
   }
   if (command === "remove") {
     return formatRemoveHelp()
+  }
+  if (command === "alias") {
+    return formatAliasHelp()
   }
   return formatGeneralHelp()
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseCliArgs } from "./args"
 import { printHelp } from "./help"
-import type { AgentName, SessionRecord } from "./types"
+import type { AgentName, AliasCommandOptions, SessionRecord } from "./types"
 
 async function ensureDirectoryExists(targetPath: string): Promise<void> {
   const fs = await import("node:fs/promises")
@@ -194,6 +194,47 @@ async function handleRemove(
   return 0
 }
 
+async function handleAlias(
+  options: AliasCommandOptions,
+): Promise<number> {
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState, removeAlias, setAlias }] =
+    await Promise.all([
+      import("./path-utils"),
+      import("./sessions"),
+      import("./state"),
+    ])
+
+  const state = await loadState()
+  const targetPath = options.path
+    ? resolveInputPath(options.path)
+    : undefined
+  const sessions = filterSessions(await loadAllSessions(state), {
+    includeAll: options.includeAll,
+    agent: options.agent,
+    path: targetPath,
+    key: options.key,
+  })
+
+  const title =
+    options.action === "set"
+      ? "选择要设置别名的会话 / Select a session to set alias"
+      : "选择要清除别名的会话 / Select a session to clear alias"
+  const selected = await pickSession(sessions, title)
+  if (!selected) {
+    return 1
+  }
+
+  if (options.action === "set") {
+    await setAlias(state, selected.agent, selected.sessionId, options.name!)
+    console.log(`已将会话 ${selected.sessionId} 的本地别名设置为 "${options.name}"`)
+    return 0
+  }
+
+  await removeAlias(state, selected.agent, selected.sessionId)
+  console.log(`已清除会话 ${selected.sessionId} 的本地别名`)
+  return 0
+}
+
 async function main(): Promise<void> {
   const parsed = parseCliArgs(process.argv.slice(2))
 
@@ -207,8 +248,10 @@ async function main(): Promise<void> {
     exitCode = await handleAdd(parsed.options)
   } else if (parsed.type === "resume") {
     exitCode = await handleResume(parsed.options)
-  } else {
+  } else if (parsed.type === "remove") {
     exitCode = await handleRemove(parsed.options)
+  } else {
+    exitCode = await handleAlias(parsed.options)
   }
 
   process.exitCode = exitCode

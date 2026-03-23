@@ -1,13 +1,44 @@
 {
   "name": "faden",
   "version": "0.1.0",
-  "description": "本地 Codex / Claude 会话管理 CLI",
+  "description": "Local Codex / Claude session management CLI",
+  "license": "MIT",
   "bin": {
     "faden": "./dist/cli.js"
+  },
+  "files": [
+    "dist/args.js",
+    "dist/child-process.js",
+    "dist/cli.js",
+    "dist/fs-utils.js",
+    "dist/help.js",
+    "dist/path-utils.js",
+    "dist/remove.js",
+    "dist/render.js",
+    "dist/sessions.js",
+    "dist/state.js",
+    "dist/types.js",
+    "dist/ui.js",
+    "dist/parsers",
+    "README.md",
+    "LICENSE",
+    "docs/README.en.md"
+  ],
+  "keywords": [
+    "codex",
+    "claude",
+    "cli",
+    "session",
+    "terminal",
+    "productivity"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm test",
     "test": "npm run build && node --test dist/test/*.test.js"
   },
   "devDependencies": {
