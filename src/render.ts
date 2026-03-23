@@ -35,6 +35,7 @@ export function formatSessionLine(
   session: SessionRecord,
   _index: number,
   selected: boolean,
+  commandAvailable = true,
 ): string {
   const pointer = selected
     ? applyStyle("▶", ACTIVE_POINTER_COLOR)
@@ -42,7 +43,8 @@ export function formatSessionLine(
   const title = session.alias || session.title || "(无标题)"
   const cwdLabel = path.basename(session.cwd) || session.cwd
   const branch = session.gitBranch ? ` · ${session.gitBranch}` : ""
-  const content = `${title} · ${cwdLabel} · ${formatTime(session.updatedAt)}${branch}`
+  const unavailable = commandAvailable ? "" : " · 未安装"
+  const content = `${title} · ${cwdLabel} · ${formatTime(session.updatedAt)}${branch}${unavailable}`
   const renderedContent = selected ? applyStyle(content, ACTIVE_TEXT_COLOR) : content
   return `${pointer} ${formatAgentLabel(session.agent)} ${renderedContent}`
 }

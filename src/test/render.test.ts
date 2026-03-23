@@ -38,3 +38,8 @@ test("formatSelectableLabel reuses selected styling for simple confirmations", (
   const line = formatSelectableLabel("确认删除 / Confirm delete", true)
   assert.match(line, /^\x1b\[1;38;2;191;219;254m▶\x1b\[0m \x1b\[38;2;148;163;184m确认删除 \/ Confirm delete\x1b\[0m$/)
 })
+
+test("formatSessionLine shows unavailable marker when agent command is missing", () => {
+  const line = formatSessionLine(baseRecord, 0, false, false)
+  assert.match(line, / · 未安装$/)
+})

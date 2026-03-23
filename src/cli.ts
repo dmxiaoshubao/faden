@@ -12,23 +12,41 @@ async function ensureDirectoryExists(targetPath: string): Promise<void> {
 }
 
 async function chooseAgent(): Promise<AgentName | null> {
-  const { selectItem } = await import("./ui")
+  const [{ selectItem }, { formatSelectableLabel }, { isCommandAvailable }] = await Promise.all([
+    import("./ui"),
+    import("./render"),
+    import("./child-process"),
+  ])
+  const availability = {
+    codex: isCommandAvailable("codex"),
+    claude: isCommandAvailable("claude"),
+  } satisfies Record<AgentName, boolean>
   return selectItem({
     title: "选择要启动的 Agent / Select an agent to start",
     items: ["codex", "claude"] satisfies AgentName[],
-    renderItem: (item, _index, selected) => `${selected ? ">" : " "} ${item}`,
+    renderItem: (item, _index, selected) => {
+      const suffix = availability[item] ? "" : " (未安装 / Not installed)"
+      return formatSelectableLabel(`${item}${suffix}`, selected)
+    },
   })
 }
 
 async function pickSession(sessions: SessionRecord[], title: string): Promise<SessionRecord | null> {
-  const [{ selectItem }, { formatSessionLine }] = await Promise.all([
+  const [{ selectItem }, { formatSessionLine }, { isCommandAvailable }] = await Promise.all([
     import("./ui"),
     import("./render"),
+    import("./child-process"),
   ])
+  const availability = {
+    codex: isCommandAvailable("codex"),
+    claude: isCommandAvailable("claude"),
+  } satisfies Record<AgentName, boolean>
   return selectItem({
     title,
     items: sessions,
-    renderItem: formatSessionLine,
+    renderItem: (item, index, selected) => {
+      return formatSessionLine(item, index, selected, availability[item.agent])
+    },
     emptyMessage: "没有匹配的会话。/ No matching sessions.",
   })
 }
