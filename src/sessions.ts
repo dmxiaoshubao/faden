@@ -83,6 +83,10 @@ export function filterSessions(
   const key = options.key?.trim().toLowerCase()
 
   return sessions.filter((session) => {
+    if (options.agent && session.agent !== options.agent) {
+      return false
+    }
+
     if (targetPath && !pathsMatch(session.cwd, targetPath)) {
       return false
     }

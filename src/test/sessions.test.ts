@@ -45,3 +45,12 @@ test("filterSessions matches key against alias and title", () => {
   assert.equal(result.length, 1)
   assert.equal(result[0].sessionId, "one")
 })
+
+test("filterSessions matches agent filter", () => {
+  const result = filterSessions(sampleSessions, {
+    includeAll: true,
+    agent: "claude",
+  })
+  assert.equal(result.length, 1)
+  assert.equal(result[0].sessionId, "two")
+})

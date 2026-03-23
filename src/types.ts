@@ -15,6 +15,7 @@ export interface SessionRecord {
 
 export interface SessionFilterOptions {
   includeAll: boolean
+  agent?: AgentName
   path?: string
   key?: string
 }
@@ -81,6 +82,7 @@ export interface AddCommandOptions {
 
 export interface ResumeCommandOptions {
   includeAll: boolean
+  agent?: AgentName
   path?: string
   key?: string
   passthroughArgs: string[]
@@ -88,6 +90,7 @@ export interface ResumeCommandOptions {
 
 export interface RemoveCommandOptions {
   includeAll: boolean
+  agent?: AgentName
   path?: string
   key?: string
 }

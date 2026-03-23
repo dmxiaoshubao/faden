@@ -1,29 +1,10 @@
 #!/usr/bin/env node
-import fs from "node:fs/promises"
-import path from "node:path"
-import { randomUUID } from "node:crypto"
-
 import { parseCliArgs } from "./args"
-import { runInteractiveCommand } from "./child-process"
-import { pathsMatch, resolveInputPath } from "./path-utils"
-import { formatSessionLine, printAliasBindResult } from "./render"
-import { removeSession } from "./remove"
-import { filterSessions, loadAllSessions } from "./sessions"
-import { loadState, setAlias } from "./state"
-import { confirmAction, selectItem } from "./ui"
+import { printHelp } from "./help"
 import type { AgentName, SessionRecord } from "./types"
 
-function printHelp(): void {
-  console.log(`faden
-
-用法:
-  faden add [-a codex|claude] [-p path] [-n name] [-- <agent args...>]
-  faden resume [-a] [-k key] [-p path] [-- <agent args...>]
-  faden remove [-a] [-k key] [-p path]
-`)
-}
-
 async function ensureDirectoryExists(targetPath: string): Promise<void> {
+  const fs = await import("node:fs/promises")
   const stats = await fs.stat(targetPath).catch(() => null)
   if (!stats || !stats.isDirectory()) {
     throw new Error(`目录不存在: ${targetPath}`)
@@ -31,29 +12,40 @@ async function ensureDirectoryExists(targetPath: string): Promise<void> {
 }
 
 async function chooseAgent(): Promise<AgentName | null> {
+  const { selectItem } = await import("./ui")
   return selectItem({
-    title: "请选择要启动的 agent",
+    title: "选择要启动的 Agent / Select an agent to start",
     items: ["codex", "claude"] satisfies AgentName[],
     renderItem: (item, _index, selected) => `${selected ? ">" : " "} ${item}`,
   })
 }
 
 async function pickSession(sessions: SessionRecord[], title: string): Promise<SessionRecord | null> {
+  const [{ selectItem }, { formatSessionLine }] = await Promise.all([
+    import("./ui"),
+    import("./render"),
+  ])
   return selectItem({
     title,
     items: sessions,
     renderItem: formatSessionLine,
-    emptyMessage: "没有匹配的会话。",
+    emptyMessage: "没有匹配的会话。/ No matching sessions.",
   })
 }
 
-async function handleAdd(): Promise<number> {
-  const parsed = parseCliArgs(process.argv.slice(2))
-  if (parsed.type !== "add") {
-    throw new Error("命令解析失败")
-  }
+async function handleAdd(
+  options: import("./types").AddCommandOptions,
+): Promise<number> {
+  const [{ randomUUID }, { resolveInputPath, pathsMatch }, { runInteractiveCommand }, { printAliasBindResult }, { loadAllSessions }, { loadState, setAlias }] =
+    await Promise.all([
+      import("node:crypto"),
+      import("./path-utils"),
+      import("./child-process"),
+      import("./render"),
+      import("./sessions"),
+      import("./state"),
+    ])
 
-  const options = parsed.options
   const targetPath = resolveInputPath(options.path ?? process.cwd())
   await ensureDirectoryExists(targetPath)
 
@@ -120,59 +112,78 @@ async function handleAdd(): Promise<number> {
   return exitCode
 }
 
-async function handleResume(): Promise<number> {
-  const parsed = parseCliArgs(process.argv.slice(2))
-  if (parsed.type !== "resume") {
-    throw new Error("命令解析失败")
-  }
+async function handleResume(
+  options: import("./types").ResumeCommandOptions,
+): Promise<number> {
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { runInteractiveCommand }] =
+    await Promise.all([
+      import("./path-utils"),
+      import("./sessions"),
+      import("./state"),
+      import("./child-process"),
+    ])
 
   const state = await loadState()
-  const targetPath = parsed.options.path
-    ? resolveInputPath(parsed.options.path)
+  const targetPath = options.path
+    ? resolveInputPath(options.path)
     : undefined
   const sessions = filterSessions(await loadAllSessions(state), {
-    includeAll: parsed.options.includeAll,
+    includeAll: options.includeAll,
+    agent: options.agent,
     path: targetPath,
-    key: parsed.options.key,
+    key: options.key,
   })
 
-  const selected = await pickSession(sessions, "选择要恢复的会话")
+  const selected = await pickSession(
+    sessions,
+    "选择要恢复的会话 / Select a session to resume",
+  )
   if (!selected) {
     return 1
   }
 
   const args =
     selected.agent === "codex"
-      ? ["resume", selected.sessionId, ...parsed.options.passthroughArgs]
-      : ["--resume", selected.sessionId, ...parsed.options.passthroughArgs]
+      ? ["resume", selected.sessionId, ...options.passthroughArgs]
+      : ["--resume", selected.sessionId, ...options.passthroughArgs]
 
   const command = selected.agent === "codex" ? "codex" : "claude"
   return runInteractiveCommand(command, args, selected.cwd)
 }
 
-async function handleRemove(): Promise<number> {
-  const parsed = parseCliArgs(process.argv.slice(2))
-  if (parsed.type !== "remove") {
-    throw new Error("命令解析失败")
-  }
+async function handleRemove(
+  options: import("./types").RemoveCommandOptions,
+): Promise<number> {
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { removeSession }, { loadState }, { confirmAction }] =
+    await Promise.all([
+      import("./path-utils"),
+      import("./sessions"),
+      import("./remove"),
+      import("./state"),
+      import("./ui"),
+    ])
 
   const state = await loadState()
-  const targetPath = parsed.options.path
-    ? resolveInputPath(parsed.options.path)
+  const targetPath = options.path
+    ? resolveInputPath(options.path)
     : undefined
   const sessions = filterSessions(await loadAllSessions(state), {
-    includeAll: parsed.options.includeAll,
+    includeAll: options.includeAll,
+    agent: options.agent,
     path: targetPath,
-    key: parsed.options.key,
+    key: options.key,
   })
 
-  const selected = await pickSession(sessions, "选择要删除的会话")
+  const selected = await pickSession(
+    sessions,
+    "选择要删除的会话 / Select a session to remove",
+  )
   if (!selected) {
     return 1
   }
 
   const confirmed = await confirmAction(
-    `确认删除 ${selected.agent} 会话 ${selected.sessionId} 吗？`,
+    `确认删除 ${selected.agent} 会话 ${selected.sessionId} 吗？ / Confirm removing ${selected.agent} session ${selected.sessionId}?`,
   )
   if (!confirmed) {
     return 1
@@ -187,17 +198,17 @@ async function main(): Promise<void> {
   const parsed = parseCliArgs(process.argv.slice(2))
 
   if (parsed.type === "help") {
-    printHelp()
+    printHelp(parsed.command)
     return
   }
 
   let exitCode = 0
   if (parsed.type === "add") {
-    exitCode = await handleAdd()
+    exitCode = await handleAdd(parsed.options)
   } else if (parsed.type === "resume") {
-    exitCode = await handleResume()
+    exitCode = await handleResume(parsed.options)
   } else {
-    exitCode = await handleRemove()
+    exitCode = await handleRemove(parsed.options)
   }
 
   process.exitCode = exitCode

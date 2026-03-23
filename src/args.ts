@@ -5,8 +5,10 @@ import type {
   ResumeCommandOptions,
 } from "./types"
 
+export type CommandName = "add" | "resume" | "remove"
+
 type ParsedCommand =
-  | { type: "help" }
+  | { type: "help"; command?: CommandName }
   | { type: "add"; options: AddCommandOptions }
   | { type: "resume"; options: ResumeCommandOptions }
   | { type: "remove"; options: RemoveCommandOptions }
@@ -45,11 +47,6 @@ function parseAddArgs(argv: string[]): AddCommandOptions {
 
   for (let index = 0; index < head.length; index += 1) {
     const arg = head[index]
-    if (arg === "-a" || arg === "--agent") {
-      options.agent = parseAgent(readValue(head, index, arg))
-      index += 1
-      continue
-    }
     if (arg === "-p" || arg === "--path") {
       options.path = readValue(head, index, arg)
       index += 1
@@ -58,6 +55,10 @@ function parseAddArgs(argv: string[]): AddCommandOptions {
     if (arg === "-n" || arg === "--name") {
       options.name = readValue(head, index, arg)
       index += 1
+      continue
+    }
+    if (!arg.startsWith("-") && !options.agent) {
+      options.agent = parseAgent(arg)
       continue
     }
     throw new Error(`未知参数: ${arg}`)
@@ -89,6 +90,10 @@ function parseResumeLikeArgs(argv: string[]): ResumeCommandOptions {
       index += 1
       continue
     }
+    if (!arg.startsWith("-") && !options.agent) {
+      options.agent = parseAgent(arg)
+      continue
+    }
     throw new Error(`未知参数: ${arg}`)
   }
 
@@ -103,27 +108,56 @@ function parseRemoveArgs(argv: string[]): RemoveCommandOptions {
   const options = parseResumeLikeArgs(argv)
   return {
     includeAll: options.includeAll,
+    agent: options.agent,
     path: options.path,
     key: options.key,
   }
 }
 
+function hasHelpFlag(argv: string[]): boolean {
+  const { head } = splitPassthrough(argv)
+  return head.includes("--help") || head.includes("-h")
+}
+
+function parseCommandName(input: string): CommandName {
+  if (input === "add" || input === "resume" || input === "remove") {
+    return input
+  }
+  throw new Error(`未知命令: ${input}`)
+}
+
 export function parseCliArgs(argv: string[]): ParsedCommand {
   const [command, ...rest] = argv
 
-  if (!command || command === "help" || command === "--help" || command === "-h") {
+  if (!command || command === "--help" || command === "-h") {
     return { type: "help" }
   }
 
+  if (command === "help") {
+    if (rest.length === 0) {
+      return { type: "help" }
+    }
+    return { type: "help", command: parseCommandName(rest[0]) }
+  }
+
   if (command === "add") {
+    if (hasHelpFlag(rest)) {
+      return { type: "help", command }
+    }
     return { type: "add", options: parseAddArgs(rest) }
   }
 
   if (command === "resume") {
+    if (hasHelpFlag(rest)) {
+      return { type: "help", command }
+    }
     return { type: "resume", options: parseResumeLikeArgs(rest) }
   }
 
   if (command === "remove") {
+    if (hasHelpFlag(rest)) {
+      return { type: "help", command }
+    }
     return { type: "remove", options: parseRemoveArgs(rest) }
   }
 
