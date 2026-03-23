@@ -32,7 +32,7 @@
 ### 使用 npm 安装
 
 ```bash
-npm install -g faden
+npm install -g @apple_zhen/faden
 ```
 
 安装完成后可直接运行：
@@ -162,7 +162,7 @@ npm test
 
 当前项目已经补齐 MIT 许可证和基础 npm 元数据，适合发布为命令行工具包。发布前建议再确认以下信息：
 
-- npm 包名 `faden` 是否可用
+- npm 包名是否可用，并确认是否使用 scoped package（例如 `@apple_zhen/faden`）
 - 最终仓库地址，以便补充 `repository`、`homepage` 和 `bugs`
 - 你的 npm 账号是否已登录，并具备发布权限
 

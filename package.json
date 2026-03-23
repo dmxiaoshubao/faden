@@ -1,5 +1,5 @@
 {
-  "name": "faden",
+  "name": "@apple_zhen/faden",
   "version": "0.1.0",
   "description": "Local Codex / Claude session management CLI",
   "license": "MIT",

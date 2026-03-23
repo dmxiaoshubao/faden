@@ -30,7 +30,7 @@
 ### Install from npm
 
 ```bash
-npm install -g faden
+npm install -g @apple_zhen/faden
 ```
 
 Then run:
