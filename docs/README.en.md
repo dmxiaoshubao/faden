@@ -30,7 +30,7 @@
 ### Install from npm
 
 ```bash
-npm install -g @apple_zhen/faden
+npm install -g @dmxiaoshubao/faden
 ```
 
 Then run:
@@ -145,16 +145,6 @@ Alias metadata locations:
 - Windows: `%AppData%/faden/state.json`
 
 `resume` and `remove` also maintain a local `session-cache.json` file with the minimal data needed to render the session list. Raw JSONL files are reparsed only when the source files or index files change in `mtime` or `size`.
-
-## Development
-
-```bash
-npm install
-npm run build
-npm test
-```
-
-Build output entry: `dist/cli.js`.
 
 ## License
 

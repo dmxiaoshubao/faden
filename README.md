@@ -32,7 +32,7 @@
 ### 使用 npm 安装
 
 ```bash
-npm install -g @apple_zhen/faden
+npm install -g @dmxiaoshubao/faden
 ```
 
 安装完成后可直接运行：
@@ -147,31 +147,6 @@ faden alias clear [codex|claude] [-a] [-k key] [-p path]
 - Windows: `%AppData%/faden/state.json`
 
 另外，`resume` 和 `remove` 会维护一份本地 `session-cache.json`，只缓存会话列表展示所需的关键信息。只有当会话文件或对应索引文件的 `mtime` 或 `size` 变化时，才会重新解析原始 JSONL。
-
-## 开发
-
-```bash
-npm install
-npm run build
-npm test
-```
-
-构建产物入口为 `dist/cli.js`。
-
-## npm 发布说明
-
-当前项目已经补齐 MIT 许可证和基础 npm 元数据，适合发布为命令行工具包。发布前建议再确认以下信息：
-
-- npm 包名是否可用，并确认是否使用 scoped package（例如 `@apple_zhen/faden`）
-- 最终仓库地址，以便补充 `repository`、`homepage` 和 `bugs`
-- 你的 npm 账号是否已登录，并具备发布权限
-
-正式发布前可先执行：
-
-```bash
-npm test
-npm pack --dry-run
-```
 
 ## 许可证
 
