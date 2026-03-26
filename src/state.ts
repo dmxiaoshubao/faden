@@ -4,12 +4,14 @@ import path from "node:path"
 
 import type { AgentName, FadenState, SessionCacheFile } from "./types"
 
+export const SESSION_CACHE_VERSION = 3
+
 const EMPTY_STATE: FadenState = {
   aliases: {},
 }
 
 const EMPTY_SESSION_CACHE: SessionCacheFile = {
-  version: 1,
+  version: SESSION_CACHE_VERSION,
   entries: {},
 }
 
@@ -67,8 +69,11 @@ export async function loadSessionCache(): Promise<SessionCacheFile> {
   try {
     const raw = await fs.readFile(filePath, "utf8")
     const parsed = JSON.parse(raw) as Partial<SessionCacheFile>
+    if (parsed.version !== SESSION_CACHE_VERSION) {
+      return { ...EMPTY_SESSION_CACHE }
+    }
     return {
-      version: parsed.version ?? EMPTY_SESSION_CACHE.version,
+      version: SESSION_CACHE_VERSION,
       entries: parsed.entries ?? {},
     }
   } catch (error) {
@@ -98,7 +103,10 @@ export async function saveState(state: FadenState): Promise<void> {
 
 export async function saveSessionCache(cache: SessionCacheFile): Promise<void> {
   const filePath = getSessionCacheFilePath()
-  await atomicWrite(filePath, JSON.stringify(cache, null, 2))
+  await atomicWrite(filePath, JSON.stringify({
+    ...cache,
+    version: SESSION_CACHE_VERSION,
+  }, null, 2))
 }
 
 export function getAlias(

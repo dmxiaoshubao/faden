@@ -1,7 +1,7 @@
 interface SelectOptions<T> {
   title: string
   items: T[]
-  renderItem: (item: T, index: number, selected: boolean) => string
+  renderItem: (item: T, index: number, selected: boolean) => string | string[]
   emptyMessage?: string
 }
 
@@ -129,6 +129,10 @@ function ensureInteractiveTerminal(): void {
   }
 }
 
+function normalizeRenderedItem(input: string | string[]): string[] {
+  return Array.isArray(input) ? input : [input]
+}
+
 export async function selectItem<T>(
   options: SelectOptions<T>,
 ): Promise<T | null> {
@@ -144,7 +148,7 @@ export async function selectItem<T>(
 
   return new Promise<T | null>((resolve) => {
     let selectedIndex = 0
-    const maxVisible = 12
+    const maxVisible = 6
 
     const render = () => {
       const maxWidth = Math.max(1, (process.stdout.columns ?? 80) - 1)
@@ -157,9 +161,12 @@ export async function selectItem<T>(
       const start = Math.max(0, selectedIndex - maxVisible + 1)
       const end = Math.min(options.items.length, start + maxVisible)
       for (let index = start; index < end; index += 1) {
-        lines.push(
+        lines.push(...normalizeRenderedItem(
           options.renderItem(options.items[index], index, index === selectedIndex),
-        )
+        ))
+        if (index < end - 1) {
+          lines.push("")
+        }
       }
 
       if (options.items.length > maxVisible) {

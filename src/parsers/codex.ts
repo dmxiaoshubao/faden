@@ -8,16 +8,18 @@ import type {
 } from "../types"
 import {
   cleanText,
+  extractMeaningfulTitle,
+  hasProjectInstructions,
   readFileLines,
   safeJsonParse,
   toIsoDate,
-  truncate,
 } from "./shared"
 
 interface CodexSummaryDraft {
   sessionId: string | null
   cwd: string | null
   title: string | null
+  hasProjectInstructions: boolean
   updatedAt: string | null
   gitBranch: string | null
   messageCount: number
@@ -35,17 +37,17 @@ export function getCodexIndexPath(): string {
   return path.join(getCodexHome(), "session_index.jsonl")
 }
 
-function extractCodexTitleCandidate(input: string): string | null {
-  const cleaned = cleanText(input)
-  if (!cleaned) {
-    return null
+function updateDraftFromUserText(
+  draft: CodexSummaryDraft,
+  input: string,
+): void {
+  if (hasProjectInstructions(input)) {
+    draft.hasProjectInstructions = true
   }
 
-  if (cleaned.startsWith("<environment_context>")) {
-    return null
+  if (!draft.title) {
+    draft.title = extractMeaningfulTitle(input)
   }
-
-  return truncate(cleaned.replace(/\s+/g, " "), 100)
 }
 
 function extractResponseText(payload: Record<string, unknown>): string | null {
@@ -61,7 +63,10 @@ function extractResponseText(payload: Record<string, unknown>): string | null {
       "text" in item &&
       typeof item.text === "string"
     ) {
-      return item.text
+      const candidate = extractMeaningfulTitle(item.text)
+      if (candidate) {
+        return candidate
+      }
     }
   }
 
@@ -73,6 +78,7 @@ function createCodexSummaryDraft(): CodexSummaryDraft {
     sessionId: null,
     cwd: null,
     title: null,
+    hasProjectInstructions: false,
     updatedAt: null,
     gitBranch: null,
     messageCount: 0,
@@ -125,7 +131,7 @@ function updateCodexSummaryDraft(
     if (payloadType === "user_message") {
       draft.messageCount += 1
       if (!draft.title && typeof payload.message === "string") {
-        draft.title = extractCodexTitleCandidate(payload.message)
+        updateDraftFromUserText(draft, payload.message)
       }
     } else if (payloadType === "agent_message") {
       draft.messageCount += 1
@@ -140,7 +146,28 @@ function updateCodexSummaryDraft(
       payload.type === "message" &&
       payload.role === "user"
     ) {
-      draft.title = extractCodexTitleCandidate(extractResponseText(payload) ?? "")
+      const content = payload.content
+      if (Array.isArray(content)) {
+        for (const item of content) {
+          if (
+            item &&
+            typeof item === "object" &&
+            "text" in item &&
+            typeof item.text === "string"
+          ) {
+            updateDraftFromUserText(draft, item.text)
+            if (draft.title) {
+              break
+            }
+          }
+        }
+        return
+      }
+
+      const responseText = extractResponseText(payload)
+      if (responseText) {
+        draft.title = responseText
+      }
     }
   }
 }
@@ -210,7 +237,7 @@ export async function parseCodexSessionFile(
   const updatedAt = summary.updatedAt as string
   const indexEntry = indexMap?.get(sessionId)
   const title =
-    cleanText(indexEntry?.thread_name ?? "") ??
+    extractMeaningfulTitle(indexEntry?.thread_name ?? "") ??
     cleanText(summary.title ?? "")
 
   return {
@@ -218,6 +245,7 @@ export async function parseCodexSessionFile(
     sessionId,
     cwd,
     title,
+    hasProjectInstructions: summary.hasProjectInstructions,
     updatedAt: toIsoDate(indexEntry?.updated_at) ?? updatedAt,
     messageCount: summary.messageCount,
     sourceFile: filePath,

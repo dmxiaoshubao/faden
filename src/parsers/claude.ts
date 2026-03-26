@@ -9,23 +9,22 @@ import type {
 } from "../types"
 import {
   cleanText,
+  extractMeaningfulTitle,
+  hasProjectInstructions,
   readFileLines,
   safeJsonParse,
   toIsoDate,
-  truncate,
 } from "./shared"
 
 interface ClaudeSummaryDraft {
   sessionId: string | null
   cwd: string | null
   title: string | null
+  hasProjectInstructions: boolean
   updatedAt: string | null
   gitBranch: string | null
   messageCount: number
 }
-
-const SYSTEM_TAG_REGEX =
-  /<system-reminder>[\s\S]*?<\/system-reminder>|<local-command-caveat>[\s\S]*?<\/local-command-caveat>|<command-name>[\s\S]*?<\/command-name>|<command-message>[\s\S]*?<\/command-message>|<command-args>[\s\S]*?<\/command-args>|<local-command-stdout>[\s\S]*?<\/local-command-stdout>|<user-prompt-submit-hook>[\s\S]*?<\/user-prompt-submit-hook>/g
 
 export function getClaudeProjectsDir(): string {
   const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude")
@@ -36,8 +35,17 @@ function decodeProjectDirName(input: string): string {
   return input.replace(/-/g, "/")
 }
 
-function stripSystemTags(input: string): string | null {
-  return cleanText(input.replace(SYSTEM_TAG_REGEX, " "))
+function updateDraftFromClaudeUserText(
+  draft: ClaudeSummaryDraft,
+  input: string,
+): void {
+  if (hasProjectInstructions(input)) {
+    draft.hasProjectInstructions = true
+  }
+
+  if (!draft.title) {
+    draft.title = extractMeaningfulTitle(input)
+  }
 }
 
 function extractClaudeUserText(message: unknown): string | null {
@@ -47,7 +55,7 @@ function extractClaudeUserText(message: unknown): string | null {
 
   const content = (message as { content?: unknown }).content
   if (typeof content === "string") {
-    return stripSystemTags(content)
+    return extractMeaningfulTitle(content)
   }
 
   if (Array.isArray(content)) {
@@ -58,9 +66,9 @@ function extractClaudeUserText(message: unknown): string | null {
         "text" in item &&
         typeof item.text === "string"
       ) {
-        const stripped = stripSystemTags(item.text)
-        if (stripped) {
-          return stripped
+        const candidate = extractMeaningfulTitle(item.text)
+        if (candidate) {
+          return candidate
         }
       }
     }
@@ -84,6 +92,7 @@ function createClaudeSummaryDraft(): ClaudeSummaryDraft {
     sessionId: null,
     cwd: null,
     title: null,
+    hasProjectInstructions: false,
     updatedAt: null,
     gitBranch: null,
     messageCount: 0,
@@ -146,9 +155,33 @@ function updateClaudeSummaryDraft(
     draft.messageCount += 1
 
     if (type === "user" && !draft.title) {
-      const text = extractClaudeUserText(value.message)
-      if (text) {
-        draft.title = truncate(text.replace(/\s+/g, " "), 100)
+      const message = value.message
+      if (message && typeof message === "object") {
+        const content = (message as { content?: unknown }).content
+        if (typeof content === "string") {
+          updateDraftFromClaudeUserText(draft, content)
+        } else if (Array.isArray(content)) {
+          for (const item of content) {
+            if (
+              item &&
+              typeof item === "object" &&
+              "text" in item &&
+              typeof item.text === "string"
+            ) {
+              updateDraftFromClaudeUserText(draft, item.text)
+              if (draft.title) {
+                break
+              }
+            }
+          }
+        }
+      }
+
+      if (!draft.title) {
+        const text = extractClaudeUserText(value.message)
+        if (text) {
+          draft.title = cleanText(text)
+        }
       }
     }
   }
@@ -234,11 +267,11 @@ export async function parseClaudeSessionFile(
   const sessionId = summary.sessionId as string
   const updatedAt = summary.updatedAt as string
   const indexEntry = indexMap?.get(sessionId)
-  const indexedSummary = cleanText(indexEntry?.summary ?? "")
+  const indexedSummary = extractMeaningfulTitle(indexEntry?.summary ?? "")
   const indexedTitle =
     indexedSummary && indexedSummary !== "New Conversation"
       ? indexedSummary
-      : cleanText(indexEntry?.firstPrompt ?? "")
+      : extractMeaningfulTitle(indexEntry?.firstPrompt ?? "")
   const cwd =
     summary.cwd ??
     cleanText(indexEntry?.projectPath ?? "") ??
@@ -246,13 +279,14 @@ export async function parseClaudeSessionFile(
 
   const title =
     indexedTitle ??
-    cleanText(summary.title ?? "")
+    extractMeaningfulTitle(summary.title ?? "")
 
   return {
     agent: "claude",
     sessionId,
     cwd,
     title,
+    hasProjectInstructions: summary.hasProjectInstructions,
     updatedAt: toIsoDate(indexEntry?.modified) ?? updatedAt,
     messageCount: indexEntry?.messageCount ?? summary.messageCount,
     sourceFile: filePath,

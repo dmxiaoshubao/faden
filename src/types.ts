@@ -5,6 +5,7 @@ export interface SessionRecord {
   sessionId: string
   cwd: string
   title: string | null
+  hasProjectInstructions?: boolean
   alias: string | null
   updatedAt: string
   messageCount: number
@@ -39,6 +40,7 @@ export interface CachedSessionRecord {
   sessionId: string
   cwd: string
   title: string | null
+  hasProjectInstructions?: boolean
   updatedAt: string
   messageCount: number
   sourceFile: string

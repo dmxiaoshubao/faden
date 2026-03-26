@@ -13,7 +13,7 @@ import {
   parseCodexSessionFile,
 } from "./parsers/codex"
 import { pathsMatch } from "./path-utils"
-import { getAlias, loadSessionCache, saveSessionCache } from "./state"
+import { getAlias, loadSessionCache, saveSessionCache, SESSION_CACHE_VERSION } from "./state"
 import type {
   CachedSessionRecord,
   FadenState,
@@ -183,7 +183,7 @@ export async function loadAllSessions(state: FadenState): Promise<SessionRecord[
   }
 
   await saveSessionCache({
-    version: 1,
+    version: SESSION_CACHE_VERSION,
     entries: nextEntries,
   })
 
