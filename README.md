@@ -84,13 +84,20 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `-a` / `--all` 用于列出所有目录的会话
 - `-p` / `--path` 用于只查看指定目录下的会话
 - `-k` / `--key` 用于按别名、标题、会话 ID 或目录做模糊过滤
-- 交互操作支持上下方向键选择，按 `Enter` 恢复，按 `q` 或 `Ctrl+C` 取消
+- 交互操作支持上下方向键选择，按 `Enter` 确认，按 `q` 或 `Ctrl+C` 取消
+- 选中会话后会再次选择打开方式，默认是终端恢复
 
 恢复方式：
 
+- `终端恢复（默认）`
 - `codex` 使用 `codex resume <sessionId>`
 - `claude` 使用 `claude --resume <sessionId>`
-- 启动前会先切换到会话原始工作目录
+- 终端恢复前会先切换到会话原始工作目录
+- `VS Code 插件打开`
+- `codex` 会先打开会话原始项目，再通过 `vscode://openai.chatgpt/local/<sessionId>` 进入对应会话
+- `claude` 会先打开会话原始项目，再通过 `vscode://anthropic.claude-code/open?session=<sessionId>` 在插件标签页中打开对应会话
+- `VS Code` 打开依赖本机可用的 `code` 命令以及对应官方插件
+- `-- <agent args...>` 仅在“终端恢复”模式下生效，VS Code 插件打开不支持透传参数
 
 ### 删除会话
 

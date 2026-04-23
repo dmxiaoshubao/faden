@@ -3,6 +3,8 @@ import { parseCliArgs } from "./args"
 import { printHelp } from "./help"
 import type { AgentName, AliasCommandOptions, SessionRecord } from "./types"
 
+type ResumeOpenMode = "terminal" | "vscode"
+
 async function ensureDirectoryExists(targetPath: string): Promise<void> {
   const fs = await import("node:fs/promises")
   const stats = await fs.stat(targetPath).catch(() => null)
@@ -49,6 +51,42 @@ async function pickSession(sessions: SessionRecord[], title: string): Promise<Se
     },
     emptyMessage: "没有匹配的会话。/ No matching sessions.",
   })
+}
+
+async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpenMode | null> {
+  const [{ selectItem }, { formatSelectableLabel }, { getVSCodeOpenAvailability }] = await Promise.all([
+    import("./ui"),
+    import("./render"),
+    import("./child-process"),
+  ])
+
+  const vsCodeAvailability = getVSCodeOpenAvailability(selected.agent)
+  const options = [
+    {
+      value: "terminal" as const,
+      label: "终端恢复（默认） / Resume in terminal (default)",
+    },
+    {
+      value: "vscode" as const,
+      label:
+        selected.agent === "claude"
+          ? "VS Code 插件打开（标签页） / Open in VS Code extension (tab)"
+          : "VS Code 插件打开 / Open in VS Code extension",
+      suffix: vsCodeAvailability.available
+        ? ""
+        : ` (${vsCodeAvailability.reason})`,
+    },
+  ]
+
+  const result = await selectItem({
+    title: "选择恢复方式 / Select how to open this session",
+    items: options,
+    renderItem: (item, _index, isSelected) => {
+      return formatSelectableLabel(`${item.label}${item.suffix ?? ""}`, isSelected)
+    },
+  })
+
+  return result?.value ?? null
 }
 
 async function handleAdd(
@@ -133,7 +171,7 @@ async function handleAdd(
 async function handleResume(
   options: import("./types").ResumeCommandOptions,
 ): Promise<number> {
-  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { runInteractiveCommand }] =
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { openSessionInVSCode, runInteractiveCommand }] =
     await Promise.all([
       import("./path-utils"),
       import("./sessions"),
@@ -158,6 +196,19 @@ async function handleResume(
   )
   if (!selected) {
     return 1
+  }
+
+  const openMode = await chooseResumeOpenMode(selected)
+  if (!openMode) {
+    return 1
+  }
+
+  if (openMode === "vscode") {
+    if (options.passthroughArgs.length > 0) {
+      throw new Error("VS Code 插件打开暂不支持透传参数，请改用终端恢复。")
+    }
+    await openSessionInVSCode(selected.agent, selected.sessionId, selected.cwd)
+    return 0
   }
 
   const args =
