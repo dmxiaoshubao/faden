@@ -1,4 +1,4 @@
-interface SelectOptions<T> {
+export interface SelectOptions<T> {
   title: string
   items: T[]
   renderItem: (item: T, index: number, selected: boolean) => string | string[]
@@ -7,6 +7,56 @@ interface SelectOptions<T> {
 
 const ANSI_RESET = "\x1b[0m"
 const UI_KEYWORD_COLOR = "\x1b[1;38;2;191;219;254m"
+const MAX_VISIBLE_ITEMS = 7
+
+type ReactRuntime = {
+  createElement: (...args: unknown[]) => unknown
+  useEffect: (effect: () => void | (() => void), deps?: readonly unknown[]) => void
+  useState: <T>(initialState: T) => [
+    T,
+    (value: T | ((currentValue: T) => T)) => void,
+  ]
+}
+
+type InkRuntime = {
+  render: (
+    node: unknown,
+    options?: {
+      stdout?: NodeJS.WriteStream
+      stdin?: NodeJS.ReadStream
+      stderr?: NodeJS.WriteStream
+      exitOnCtrlC?: boolean
+      patchConsole?: boolean
+      alternateScreen?: boolean
+      incrementalRendering?: boolean
+    },
+  ) => {
+    waitUntilExit: () => Promise<unknown>
+  }
+  Text: unknown
+  useApp: () => { exit: (errorOrResult?: Error | unknown) => void }
+  useCursor: () => { setCursorPosition: (position: { x: number; y: number } | undefined) => void }
+  useInput: (
+    inputHandler: (
+      input: string,
+      key: {
+        upArrow: boolean
+        downArrow: boolean
+        return: boolean
+        escape: boolean
+        ctrl: boolean
+      },
+    ) => void,
+  ) => void
+  useWindowSize: () => { columns: number; rows: number }
+}
+
+const loadEsmModule = new Function(
+  "specifier",
+  "return import(specifier)",
+) as <T>(specifier: string) => Promise<T>
+
+let inkRuntimePromise: Promise<{ React: ReactRuntime; ink: InkRuntime }> | undefined
 
 function highlightUiKeyword(input: string): string {
   return `${UI_KEYWORD_COLOR}${input}${ANSI_RESET}`
@@ -48,26 +98,6 @@ export function getVisibleWindowRange(
     start,
     end: Math.min(totalItems, start + maxVisible),
   }
-}
-
-function hideCursor(): void {
-  process.stdout.write("\x1b[?25l")
-}
-
-function showCursor(): void {
-  process.stdout.write("\x1b[?25h")
-}
-
-function enterAlternateScreen(): void {
-  process.stdout.write("\x1b[?1049h")
-}
-
-function leaveAlternateScreen(): void {
-  process.stdout.write("\x1b[?1049l")
-}
-
-function clearScreen(): void {
-  process.stdout.write("\x1b[2J\x1b[H")
 }
 
 function charDisplayWidth(char: string): number {
@@ -121,6 +151,7 @@ function truncateLine(input: string, maxWidth: number): string {
       truncated = true
       break
     }
+
     segments.push({ value: char, width: charWidth })
     width = nextWidth
     index += 1
@@ -142,8 +173,8 @@ function truncateLine(input: string, maxWidth: number): string {
   }
 
   let output = segments.map((segment) => segment.value).join("")
-  if (output.includes("\x1b[") && !output.endsWith("\x1b[0m")) {
-    output += "\x1b[0m"
+  if (output.includes("\x1b[") && !output.endsWith(ANSI_RESET)) {
+    output += ANSI_RESET
   }
 
   return `${output}…`
@@ -159,6 +190,61 @@ function normalizeRenderedItem(input: string | string[]): string[] {
   return Array.isArray(input) ? input : [input]
 }
 
+async function loadInkRuntime(): Promise<{ React: ReactRuntime; ink: InkRuntime }> {
+  if (!inkRuntimePromise) {
+    inkRuntimePromise = Promise.all([
+      loadEsmModule<typeof import("react")>("react"),
+      loadEsmModule<unknown>("ink"),
+    ]).then(([reactModule, inkModule]) => {
+      const reactValue = (
+        "default" in reactModule && reactModule.default
+          ? reactModule.default
+          : reactModule
+      ) as unknown as ReactRuntime
+
+      return {
+        React: reactValue,
+        ink: inkModule as unknown as InkRuntime,
+      }
+    })
+  }
+
+  return inkRuntimePromise
+}
+
+export function buildSelectorLines<T>(
+  options: SelectOptions<T>,
+  selectedIndex: number,
+  maxWidth: number,
+): string[] {
+  const lines = [
+    options.title,
+    ...formatSelectorInstructions(),
+    "",
+  ]
+
+  const { start, end } = getVisibleWindowRange(
+    selectedIndex,
+    options.items.length,
+    MAX_VISIBLE_ITEMS,
+  )
+
+  for (let index = start; index < end; index += 1) {
+    lines.push(...normalizeRenderedItem(
+      options.renderItem(options.items[index], index, index === selectedIndex),
+    ))
+    if (index < end - 1) {
+      lines.push("")
+    }
+  }
+
+  if (options.items.length > MAX_VISIBLE_ITEMS) {
+    lines.push("", formatSelectorStatus(start + 1, end, options.items.length))
+  }
+
+  return lines.map((line) => truncateLine(line, maxWidth))
+}
+
 export async function selectItem<T>(
   options: SelectOptions<T>,
 ): Promise<T | null> {
@@ -169,89 +255,72 @@ export async function selectItem<T>(
       console.log(options.emptyMessage)
       return null
     }
+
     throw new Error("没有可选项。")
   }
 
-  return new Promise<T | null>((resolve) => {
-    let selectedIndex = 0
-    const maxVisible = 7
+  const { React, ink } = await loadInkRuntime()
+  const { createElement, useEffect, useState } = React
+  const { Text, render, useApp, useCursor, useInput, useWindowSize } = ink
 
-    const render = () => {
-      const maxWidth = Math.max(1, (process.stdout.columns ?? 80) - 1)
-      const lines = [
-        options.title,
-        ...formatSelectorInstructions(),
-        "",
-      ]
+  const Selector = () => {
+    const [selectedIndex, setSelectedIndex] = useState(0)
+    const { columns } = useWindowSize()
+    const { exit } = useApp()
+    const { setCursorPosition } = useCursor()
 
-      const { start, end } = getVisibleWindowRange(
+    useEffect(() => {
+      setCursorPosition(undefined)
+    }, [setCursorPosition])
+
+    useInput((input, key) => {
+      if (key.upArrow) {
+        setSelectedIndex((currentIndex) => {
+          return (currentIndex - 1 + options.items.length) % options.items.length
+        })
+        return
+      }
+
+      if (key.downArrow) {
+        setSelectedIndex((currentIndex) => {
+          return (currentIndex + 1) % options.items.length
+        })
+        return
+      }
+
+      if (key.return) {
+        exit(options.items[selectedIndex])
+        return
+      }
+
+      if (key.escape || input === "q" || input === "Q" || input === "\u0003" || (key.ctrl && input.toLowerCase() === "c")) {
+        exit(null)
+      }
+    })
+
+    return createElement(
+      Text,
+      { wrap: "truncate-end" },
+      buildSelectorLines(
+        options,
         selectedIndex,
-        options.items.length,
-        maxVisible,
-      )
-      for (let index = start; index < end; index += 1) {
-        lines.push(...normalizeRenderedItem(
-          options.renderItem(options.items[index], index, index === selectedIndex),
-        ))
-        if (index < end - 1) {
-          lines.push("")
-        }
-      }
+        Math.max(1, columns - 1),
+      ).join("\n"),
+    )
+  }
 
-      if (options.items.length > maxVisible) {
-        lines.push("", formatSelectorStatus(start + 1, end, options.items.length))
-      }
-
-      clearScreen()
-      process.stdout.write(lines.map((line) => truncateLine(line, maxWidth)).join("\n"))
-    }
-
-    const cleanup = () => {
-      process.stdin.setRawMode(false)
-      process.stdin.off("data", onData)
-      process.stdin.pause()
-      showCursor()
-      leaveAlternateScreen()
-    }
-
-    const finish = (value: T | null) => {
-      cleanup()
-      resolve(value)
-    }
-
-    const onData = (input: Buffer | string) => {
-      const key = Buffer.isBuffer(input) ? input.toString("utf8") : input
-
-      if (key === "\u001b[A" || key === "\u001bOA") {
-        selectedIndex =
-          (selectedIndex - 1 + options.items.length) % options.items.length
-        render()
-        return
-      }
-
-      if (key === "\u001b[B" || key === "\u001bOB") {
-        selectedIndex = (selectedIndex + 1) % options.items.length
-        render()
-        return
-      }
-
-      if (key === "\r" || key === "\n") {
-        finish(options.items[selectedIndex])
-        return
-      }
-
-      if (key === "\u001b" || key === "q" || key === "Q" || key === "\u0003") {
-        finish(null)
-      }
-    }
-
-    process.stdin.resume()
-    process.stdin.setRawMode(true)
-    enterAlternateScreen()
-    hideCursor()
-    render()
-    process.stdin.on("data", onData)
+  const inkInstance = render(createElement(Selector), {
+    stdout: process.stdout,
+    stdin: process.stdin,
+    stderr: process.stderr,
+    exitOnCtrlC: false,
+    patchConsole: false,
+    alternateScreen: true,
+    incrementalRendering: true,
   })
+
+  const result = await inkInstance.waitUntilExit()
+  return result == null ? null : result as T
 }
 
 export async function confirmAction(message: string): Promise<boolean> {

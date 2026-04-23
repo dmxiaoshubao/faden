@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import {
+  buildSelectorLines,
   formatSelectorInstructions,
   formatSelectorStatus,
   getVisibleWindowRange,
@@ -65,4 +66,21 @@ test("getVisibleWindowRange returns full range when total does not exceed page s
     start: 0,
     end: 3,
   })
+})
+
+test("buildSelectorLines renders a 7-item centered window with footer status", () => {
+  const lines = buildSelectorLines({
+    title: "选择测试会话",
+    items: Array.from({ length: 10 }, (_, index) => `item-${String(index + 1).padStart(2, "0")}`),
+    renderItem: (item) => item,
+  }, 5, 120)
+
+  const output = stripAnsi(lines.join("\n"))
+
+  assert.match(output, /item-03/)
+  assert.match(output, /item-09/)
+  assert.doesNotMatch(output, /item-01/)
+  assert.doesNotMatch(output, /item-02/)
+  assert.doesNotMatch(output, /item-10/)
+  assert.match(output, /显示 3-9 \/ 10 项/)
 })

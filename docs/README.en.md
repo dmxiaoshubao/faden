@@ -23,7 +23,7 @@
 
 ### Requirements
 
-- Node.js `>= 18`
+- Node.js `>= 22`
 - `codex` installed and available in `PATH`
 - `claude` installed and available in `PATH` if you want Claude session support
 
