@@ -24,6 +24,32 @@ export function formatSelectorStatus(start: number, end: number, total: number):
   return `显示 ${highlightUiKeyword(range)} / ${highlightUiKeyword(String(total))} 项 · Showing ${highlightUiKeyword(range)} of ${highlightUiKeyword(String(total))}`
 }
 
+export function getVisibleWindowRange(
+  selectedIndex: number,
+  totalItems: number,
+  maxVisible: number,
+): { start: number; end: number } {
+  if (totalItems <= 0 || maxVisible <= 0) {
+    return { start: 0, end: 0 }
+  }
+
+  if (totalItems <= maxVisible) {
+    return { start: 0, end: totalItems }
+  }
+
+  const halfWindow = Math.floor(maxVisible / 2)
+  const maxStart = totalItems - maxVisible
+  const start = Math.min(
+    Math.max(0, selectedIndex - halfWindow),
+    maxStart,
+  )
+
+  return {
+    start,
+    end: Math.min(totalItems, start + maxVisible),
+  }
+}
+
 function hideCursor(): void {
   process.stdout.write("\x1b[?25l")
 }
@@ -148,7 +174,7 @@ export async function selectItem<T>(
 
   return new Promise<T | null>((resolve) => {
     let selectedIndex = 0
-    const maxVisible = 6
+    const maxVisible = 7
 
     const render = () => {
       const maxWidth = Math.max(1, (process.stdout.columns ?? 80) - 1)
@@ -158,8 +184,11 @@ export async function selectItem<T>(
         "",
       ]
 
-      const start = Math.max(0, selectedIndex - maxVisible + 1)
-      const end = Math.min(options.items.length, start + maxVisible)
+      const { start, end } = getVisibleWindowRange(
+        selectedIndex,
+        options.items.length,
+        maxVisible,
+      )
       for (let index = start; index < end; index += 1) {
         lines.push(...normalizeRenderedItem(
           options.renderItem(options.items[index], index, index === selectedIndex),

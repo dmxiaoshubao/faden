@@ -1,7 +1,11 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { formatSelectorInstructions, formatSelectorStatus } from "../ui"
+import {
+  formatSelectorInstructions,
+  formatSelectorStatus,
+  getVisibleWindowRange,
+} from "../ui"
 
 function stripAnsi(input: string): string {
   return input.replace(/\x1b\[[0-9;]*m/g, "")
@@ -20,4 +24,45 @@ test("formatSelectorStatus highlights range and total in bilingual footer", () =
   assert.match(stripAnsi(output), /显示 .*1-12.*188.* 项 · Showing .*1-12.*188/)
   assert.match(output, /\x1b\[1;38;2;191;219;254m1-12\x1b\[0m/)
   assert.match(output, /\x1b\[1;38;2;191;219;254m188\x1b\[0m/)
+})
+
+test("getVisibleWindowRange shows at most 7 items and keeps selection centered when possible", () => {
+  assert.deepEqual(getVisibleWindowRange(5, 20, 7), {
+    start: 2,
+    end: 9,
+  })
+  assert.deepEqual(getVisibleWindowRange(10, 20, 7), {
+    start: 7,
+    end: 14,
+  })
+})
+
+test("getVisibleWindowRange sticks to the top and bottom near boundaries", () => {
+  assert.deepEqual(getVisibleWindowRange(0, 20, 7), {
+    start: 0,
+    end: 7,
+  })
+  assert.deepEqual(getVisibleWindowRange(1, 20, 7), {
+    start: 0,
+    end: 7,
+  })
+  assert.deepEqual(getVisibleWindowRange(19, 20, 7), {
+    start: 13,
+    end: 20,
+  })
+  assert.deepEqual(getVisibleWindowRange(18, 20, 7), {
+    start: 13,
+    end: 20,
+  })
+})
+
+test("getVisibleWindowRange returns full range when total does not exceed page size", () => {
+  assert.deepEqual(getVisibleWindowRange(2, 7, 7), {
+    start: 0,
+    end: 7,
+  })
+  assert.deepEqual(getVisibleWindowRange(0, 3, 7), {
+    start: 0,
+    end: 3,
+  })
 })
