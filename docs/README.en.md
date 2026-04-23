@@ -82,13 +82,27 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `-a` / `--all` lists sessions across all directories
 - `-p` / `--path` limits results to a specific directory
 - `-k` / `--key` filters by alias, title, session ID, or directory
-- Interactive controls: arrow keys to move, `Enter` to resume, `q` or `Ctrl+C` to cancel
+- Interactive controls: arrow keys to move, `Enter` to confirm, `q` or `Ctrl+C` to cancel
+- After selecting a session, `faden` asks how to open it
+- Built-in IDE presets: `VS Code`, `Cursor`, `Trae`, `Windsurf`, and `Antigravity`
 
 Resume behavior:
 
+- `Resume in terminal (default)`
 - `codex` uses `codex resume <sessionId>`
 - `claude` uses `claude --resume <sessionId>`
-- The command runs inside the session's original working directory
+- Terminal resume runs inside the session's original working directory
+- `Open in IDE extension`
+- `codex` first opens the original project in the selected IDE, then uses `${scheme}://openai.chatgpt/local/<sessionId>` to jump into the matching session
+- `claude` first opens the original project in the selected IDE, then uses `${scheme}://anthropic.claude-code/open?session=<sessionId>` to open the session in an IDE extension tab
+- Built-in URI schemes:
+- `VS Code` -> `vscode://`
+- `Cursor` -> `cursor://`
+- `Trae` -> `trae://`
+- `Windsurf` -> `windsurf://`
+- `Antigravity` -> `antigravity://`
+- IDE opening requires both the IDE shell command and the matching official extension to be installed
+- Arguments after `--` are only supported for terminal resume, not IDE extension opening
 
 ### Remove a session
 

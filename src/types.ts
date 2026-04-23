@@ -1,4 +1,5 @@
 export type AgentName = "codex" | "claude"
+export type IdeName = "vscode" | "cursor" | "trae" | "windsurf" | "antigravity"
 
 export interface SessionRecord {
   agent: AgentName

@@ -86,6 +86,7 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `-k` / `--key` 用于按别名、标题、会话 ID 或目录做模糊过滤
 - 交互操作支持上下方向键选择，按 `Enter` 确认，按 `q` 或 `Ctrl+C` 取消
 - 选中会话后会再次选择打开方式，默认是终端恢复
+- 当前支持的 IDE 预设：`VS Code`、`Cursor`、`Trae`、`Windsurf`、`Antigravity`
 
 恢复方式：
 
@@ -93,11 +94,17 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `codex` 使用 `codex resume <sessionId>`
 - `claude` 使用 `claude --resume <sessionId>`
 - 终端恢复前会先切换到会话原始工作目录
-- `VS Code 插件打开`
-- `codex` 会先打开会话原始项目，再通过 `vscode://openai.chatgpt/local/<sessionId>` 进入对应会话
-- `claude` 会先打开会话原始项目，再通过 `vscode://anthropic.claude-code/open?session=<sessionId>` 在插件标签页中打开对应会话
-- `VS Code` 打开依赖本机可用的 `code` 命令以及对应官方插件
-- `-- <agent args...>` 仅在“终端恢复”模式下生效，VS Code 插件打开不支持透传参数
+- `IDE 插件打开`
+- `codex` 会先用所选 IDE 打开会话原始项目，再通过 `${scheme}://openai.chatgpt/local/<sessionId>` 进入对应会话
+- `claude` 会先用所选 IDE 打开会话原始项目，再通过 `${scheme}://anthropic.claude-code/open?session=<sessionId>` 在插件标签页中打开对应会话
+- 当前内置 URI scheme：
+  - `VS Code` -> `vscode://`
+  - `Cursor` -> `cursor://`
+  - `Trae` -> `trae://`
+  - `Windsurf` -> `windsurf://`
+  - `Antigravity` -> `antigravity://`
+- IDE 打开依赖对应 shell 命令和对应官方插件都已安装
+- `-- <agent args...>` 仅在“终端恢复”模式下生效，IDE 插件打开不支持透传参数
 
 ### 删除会话
 

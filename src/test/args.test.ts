@@ -79,7 +79,8 @@ test("renderHelp shows both short and long resume options", () => {
   assert.match(output, /-k, --key <key>/)
   assert.match(output, /-p, --path <path>/)
   assert.match(output, /codex\|claude/)
-  assert.match(output, /终端恢复（默认）或在 VS Code 插件中打开/)
+  assert.match(output, /支持的 IDE 插件中打开/)
+  assert.match(output, /supported IDE extension/)
   assert.match(output, /only for terminal resume/)
 })
 

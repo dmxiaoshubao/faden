@@ -52,8 +52,8 @@ function formatResumeHelp(): string {
   -- <agent args...>   透传给 codex resume / claude --resume，仅终端恢复可用 / Pass through to codex resume or claude --resume, only for terminal resume
 
 说明 / Notes:
-  选中会话后会再次选择恢复方式：终端恢复（默认）或在 VS Code 插件中打开
-  After picking a session, choose whether to resume in terminal (default) or open it in the VS Code extension
+  选中会话后会再次选择恢复方式：终端恢复（默认）或在支持的 IDE 插件中打开（VS Code / Cursor / Trae / Windsurf / Antigravity）
+  After picking a session, choose whether to resume in terminal (default) or open it in a supported IDE extension
 `
 }
 

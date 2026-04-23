@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseCliArgs } from "./args"
 import { printHelp } from "./help"
-import type { AgentName, AliasCommandOptions, SessionRecord } from "./types"
+import type { AgentName, AliasCommandOptions, IdeName, SessionRecord } from "./types"
 
-type ResumeOpenMode = "terminal" | "vscode"
+type ResumeOpenMode = "terminal" | IdeName
 
 async function ensureDirectoryExists(targetPath: string): Promise<void> {
   const fs = await import("node:fs/promises")
@@ -54,28 +54,30 @@ async function pickSession(sessions: SessionRecord[], title: string): Promise<Se
 }
 
 async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpenMode | null> {
-  const [{ selectItem }, { formatSelectableLabel }, { getVSCodeOpenAvailability }] = await Promise.all([
+  const [{ selectItem }, { formatSelectableLabel }, { getIdeLabel, getIdeOpenAvailability, getSupportedIdeNames }] = await Promise.all([
     import("./ui"),
     import("./render"),
     import("./child-process"),
   ])
 
-  const vsCodeAvailability = getVSCodeOpenAvailability(selected.agent)
   const options = [
     {
       value: "terminal" as const,
       label: "终端恢复（默认） / Resume in terminal (default)",
+      suffix: "",
     },
-    {
-      value: "vscode" as const,
-      label:
-        selected.agent === "claude"
-          ? "VS Code 插件打开（标签页） / Open in VS Code extension (tab)"
-          : "VS Code 插件打开 / Open in VS Code extension",
-      suffix: vsCodeAvailability.available
-        ? ""
-        : ` (${vsCodeAvailability.reason})`,
-    },
+    ...getSupportedIdeNames().map((ide) => {
+      const availability = getIdeOpenAvailability(ide, selected.agent)
+      const ideLabel = getIdeLabel(ide)
+      return {
+        value: ide,
+        label:
+          selected.agent === "claude"
+            ? `${ideLabel} 插件打开（标签页） / Open in ${ideLabel} extension (tab)`
+            : `${ideLabel} 插件打开 / Open in ${ideLabel} extension`,
+        suffix: availability.available ? "" : ` (${availability.reason})`,
+      }
+    }),
   ]
 
   const result = await selectItem({
@@ -171,7 +173,7 @@ async function handleAdd(
 async function handleResume(
   options: import("./types").ResumeCommandOptions,
 ): Promise<number> {
-  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { openSessionInVSCode, runInteractiveCommand }] =
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { openSessionInIde, runInteractiveCommand }] =
     await Promise.all([
       import("./path-utils"),
       import("./sessions"),
@@ -203,11 +205,11 @@ async function handleResume(
     return 1
   }
 
-  if (openMode === "vscode") {
+  if (openMode !== "terminal") {
     if (options.passthroughArgs.length > 0) {
-      throw new Error("VS Code 插件打开暂不支持透传参数，请改用终端恢复。")
+      throw new Error("IDE 插件打开暂不支持透传参数，请改用终端恢复。")
     }
-    await openSessionInVSCode(selected.agent, selected.sessionId, selected.cwd)
+    await openSessionInIde(openMode, selected.agent, selected.sessionId, selected.cwd)
     return 0
   }
 

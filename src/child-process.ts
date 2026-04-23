@@ -1,15 +1,45 @@
 import { spawn, spawnSync } from "node:child_process"
 
-import type { AgentName } from "./types"
+import type { AgentName, IdeName } from "./types"
 
 const INSTALL_GUIDES: Partial<Record<string, string>> = {
   codex: "https://github.com/openai/codex",
   claude: "https://github.com/anthropics/claude-code",
 }
 
-const VS_CODE_COMMAND = "code"
+const IDE_CONFIGS: Record<IdeName, {
+  label: string
+  command: string
+  uriScheme: string
+}> = {
+  vscode: {
+    label: "VS Code",
+    command: "code",
+    uriScheme: "vscode",
+  },
+  cursor: {
+    label: "Cursor",
+    command: "cursor",
+    uriScheme: "cursor",
+  },
+  trae: {
+    label: "Trae",
+    command: "trae",
+    uriScheme: "trae",
+  },
+  windsurf: {
+    label: "Windsurf",
+    command: "windsurf",
+    uriScheme: "windsurf",
+  },
+  antigravity: {
+    label: "Antigravity",
+    command: "agy",
+    uriScheme: "antigravity",
+  },
+}
 
-const VS_CODE_EXTENSIONS: Record<AgentName, string> = {
+const AGENT_IDE_EXTENSIONS: Record<AgentName, string> = {
   codex: "openai.chatgpt",
   claude: "anthropic.claude-code",
 }
@@ -18,7 +48,7 @@ interface RunCommandOptions {
   stdio?: "inherit" | "ignore"
 }
 
-export interface VSCodeOpenAvailability {
+export interface IdeOpenAvailability {
   available: boolean
   reason?: string
 }
@@ -34,23 +64,42 @@ export function formatMissingCommandMessage(command: string): string {
   return lines.join("\n")
 }
 
-export function formatMissingVSCodeCommandMessage(): string {
+export function getIdeLabel(ide: IdeName): string {
+  return IDE_CONFIGS[ide].label
+}
+
+export function getIdeCommand(ide: IdeName): string {
+  return IDE_CONFIGS[ide].command
+}
+
+export function getIdeUriScheme(ide: IdeName): string {
+  return IDE_CONFIGS[ide].uriScheme
+}
+
+export function getSupportedIdeNames(): IdeName[] {
+  return Object.keys(IDE_CONFIGS) as IdeName[]
+}
+
+export function formatMissingIdeCommandMessage(ide: IdeName): string {
+  const command = getIdeCommand(ide)
+  const label = getIdeLabel(ide)
   return [
-    `未检测到命令 "${VS_CODE_COMMAND}"，无法在 VS Code 插件中打开会话。`,
-    "请先在 VS Code 命令面板执行: Shell Command: Install 'code' command in PATH",
+    `未检测到命令 "${command}"，无法在 ${label} 插件中打开会话。`,
+    `请先为 ${label} 安装 shell command 到 PATH。`,
   ].join("\n")
 }
 
-export function getVSCodeExtensionId(agent: AgentName): string {
-  return VS_CODE_EXTENSIONS[agent]
+export function getAgentIdeExtensionId(agent: AgentName): string {
+  return AGENT_IDE_EXTENSIONS[agent]
 }
 
-export function formatMissingVSCodeExtensionMessage(agent: AgentName): string {
-  const extensionId = getVSCodeExtensionId(agent)
-  return `未检测到 VS Code 插件 "${extensionId}"，无法为 ${agent} 打开对应会话。`
+export function formatMissingIdeExtensionMessage(agent: AgentName, ide: IdeName): string {
+  const extensionId = getAgentIdeExtensionId(agent)
+  const ideLabel = getIdeLabel(ide)
+  return `未检测到 ${ideLabel} 插件 "${extensionId}"，无法为 ${agent} 打开对应会话。`
 }
 
-export function parseVSCodeExtensions(output: string): string[] {
+export function parseIdeExtensions(output: string): string[] {
   return output
     .split(/\r?\n/u)
     .map((line) => line.trim())
@@ -58,16 +107,23 @@ export function parseVSCodeExtensions(output: string): string[] {
     .map((line) => line.split("@")[0] ?? line)
 }
 
-export function buildVSCodeSessionUri(agent: AgentName, sessionId: string): string {
+export function buildIdeSessionUri(
+  ide: IdeName,
+  agent: AgentName,
+  sessionId: string,
+): string {
+  const uriScheme = getIdeUriScheme(ide)
+  const extensionId = getAgentIdeExtensionId(agent)
+
   if (agent === "codex") {
-    return `vscode://${getVSCodeExtensionId(agent)}/local/${encodeURIComponent(sessionId)}`
+    return `${uriScheme}://${extensionId}/local/${encodeURIComponent(sessionId)}`
   }
 
   const params = new URLSearchParams({ session: sessionId })
-  return `vscode://${getVSCodeExtensionId(agent)}/open?${params.toString()}`
+  return `${uriScheme}://${extensionId}/open?${params.toString()}`
 }
 
-export function buildVSCodeWorkspaceOpenArgs(cwd: string): string[] {
+export function buildIdeWorkspaceOpenArgs(cwd: string): string[] {
   return ["-n", cwd]
 }
 
@@ -90,16 +146,18 @@ export function ensureCommandAvailable(command: string): void {
   }
 }
 
-function ensureVSCodeCommandAvailable(): void {
-  if (!isCommandAvailable(VS_CODE_COMMAND)) {
-    throw new Error(formatMissingVSCodeCommandMessage())
+function ensureIdeCommandAvailable(ide: IdeName): void {
+  const command = getIdeCommand(ide)
+  if (!isCommandAvailable(command)) {
+    throw new Error(formatMissingIdeCommandMessage(ide))
   }
 }
 
-export function listVSCodeExtensions(): string[] {
-  ensureVSCodeCommandAvailable()
+export function listIdeExtensions(ide: IdeName): string[] {
+  const command = getIdeCommand(ide)
+  ensureIdeCommandAvailable(ide)
 
-  const result = spawnSync(VS_CODE_COMMAND, ["--list-extensions"], {
+  const result = spawnSync(command, ["--list-extensions"], {
     shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
     encoding: "utf8",
@@ -107,27 +165,31 @@ export function listVSCodeExtensions(): string[] {
 
   if (result.status !== 0) {
     const stderr = typeof result.stderr === "string" ? result.stderr.trim() : ""
-    throw new Error(stderr || "读取 VS Code 插件列表失败。")
+    throw new Error(stderr || `读取 ${getIdeLabel(ide)} 插件列表失败。`)
   }
 
-  return parseVSCodeExtensions(result.stdout ?? "")
+  return parseIdeExtensions(result.stdout ?? "")
 }
 
-export function isVSCodeExtensionInstalled(agent: AgentName): boolean {
-  const extensionId = getVSCodeExtensionId(agent)
-  return listVSCodeExtensions().includes(extensionId)
+export function isIdeExtensionInstalled(ide: IdeName, agent: AgentName): boolean {
+  const extensionId = getAgentIdeExtensionId(agent)
+  return listIdeExtensions(ide).includes(extensionId)
 }
 
-export function getVSCodeOpenAvailability(agent: AgentName): VSCodeOpenAvailability {
-  if (!isCommandAvailable(VS_CODE_COMMAND)) {
+export function getIdeOpenAvailability(
+  ide: IdeName,
+  agent: AgentName,
+): IdeOpenAvailability {
+  const command = getIdeCommand(ide)
+  if (!isCommandAvailable(command)) {
     return {
       available: false,
-      reason: "未检测到 code 命令",
+      reason: `未检测到 ${command} 命令`,
     }
   }
 
   try {
-    if (!isVSCodeExtensionInstalled(agent)) {
+    if (!isIdeExtensionInstalled(ide, agent)) {
       return {
         available: false,
         reason: "未安装对应插件",
@@ -136,17 +198,17 @@ export function getVSCodeOpenAvailability(agent: AgentName): VSCodeOpenAvailabil
   } catch {
     return {
       available: false,
-      reason: "无法读取 VS Code 插件列表",
+      reason: "无法读取插件列表",
     }
   }
 
   return { available: true }
 }
 
-function ensureVSCodeOpenAvailable(agent: AgentName): void {
-  ensureVSCodeCommandAvailable()
-  if (!isVSCodeExtensionInstalled(agent)) {
-    throw new Error(formatMissingVSCodeExtensionMessage(agent))
+function ensureIdeOpenAvailable(ide: IdeName, agent: AgentName): void {
+  ensureIdeCommandAvailable(ide)
+  if (!isIdeExtensionInstalled(ide, agent)) {
+    throw new Error(formatMissingIdeExtensionMessage(agent, ide))
   }
 }
 
@@ -189,28 +251,30 @@ export async function runInteractiveCommand(
   return runCommand(command, args, cwd, { stdio: "inherit" })
 }
 
-export async function openSessionInVSCode(
+export async function openSessionInIde(
+  ide: IdeName,
   agent: AgentName,
   sessionId: string,
   cwd: string,
 ): Promise<void> {
-  ensureVSCodeOpenAvailable(agent)
+  ensureIdeOpenAvailable(ide, agent)
 
-  const uri = buildVSCodeSessionUri(agent, sessionId)
+  const command = getIdeCommand(ide)
+  const uri = buildIdeSessionUri(ide, agent, sessionId)
   const revealExitCode = await runCommand(
-    VS_CODE_COMMAND,
-    buildVSCodeWorkspaceOpenArgs(cwd),
+    command,
+    buildIdeWorkspaceOpenArgs(cwd),
     cwd,
   )
   if (revealExitCode !== 0) {
-    throw new Error(`打开 VS Code 项目失败，退出码: ${revealExitCode}`)
+    throw new Error(`打开 ${getIdeLabel(ide)} 项目失败，退出码: ${revealExitCode}`)
   }
 
   const warmupDelayMs = agent === "claude" ? 500 : 200
   await new Promise((resolve) => setTimeout(resolve, warmupDelayMs))
 
-  const openExitCode = await runCommand(VS_CODE_COMMAND, ["--open-url", uri], cwd)
+  const openExitCode = await runCommand(command, ["--open-url", uri], cwd)
   if (openExitCode !== 0) {
-    throw new Error(`通过 VS Code 插件打开会话失败，退出码: ${openExitCode}`)
+    throw new Error(`通过 ${getIdeLabel(ide)} 插件打开会话失败，退出码: ${openExitCode}`)
   }
 }
