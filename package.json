@@ -1,6 +1,6 @@
 {
   "name": "@dmxiaoshubao/faden",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local Codex / Claude session management CLI",
   "license": "MIT",
   "repository": {
@@ -29,6 +29,7 @@
     "dist/ui.js",
     "dist/parsers",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "docs/README.en.md"
   ],
