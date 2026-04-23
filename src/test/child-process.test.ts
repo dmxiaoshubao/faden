@@ -14,6 +14,7 @@ import {
   getSupportedIdeNames,
   isCommandAvailable,
   parseIdeExtensions,
+  runCommand,
 } from "../child-process"
 
 test("formatMissingCommandMessage shows codex install guide", () => {
@@ -101,5 +102,16 @@ test("isCommandAvailable returns false for a definitely missing command", () => 
   assert.equal(
     isCommandAvailable("faden-command-that-should-not-exist-for-tests"),
     false,
+  )
+})
+
+test("runCommand reports a friendly missing-command error without preflight checks", async () => {
+  await assert.rejects(
+    runCommand(
+      "faden-command-that-should-not-exist-for-tests",
+      [],
+      process.cwd(),
+    ),
+    /未检测到命令 "faden-command-that-should-not-exist-for-tests"/,
   )
 })

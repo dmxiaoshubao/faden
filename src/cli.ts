@@ -54,7 +54,7 @@ async function pickSession(sessions: SessionRecord[], title: string): Promise<Se
 }
 
 async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpenMode | null> {
-  const [{ selectItem }, { formatSelectableLabel }, { getIdeLabel, getIdeOpenAvailability, getSupportedIdeNames }] = await Promise.all([
+  const [{ selectItem }, { formatSelectableLabel }, { getIdeLabel, getSupportedIdeNames }] = await Promise.all([
     import("./ui"),
     import("./render"),
     import("./child-process"),
@@ -64,10 +64,8 @@ async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpen
     {
       value: "terminal" as const,
       label: "终端恢复（默认） / Resume in terminal (default)",
-      suffix: "",
     },
     ...getSupportedIdeNames().map((ide) => {
-      const availability = getIdeOpenAvailability(ide, selected.agent)
       const ideLabel = getIdeLabel(ide)
       return {
         value: ide,
@@ -75,7 +73,6 @@ async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpen
           selected.agent === "claude"
             ? `${ideLabel} 插件打开（标签页） / Open in ${ideLabel} extension (tab)`
             : `${ideLabel} 插件打开 / Open in ${ideLabel} extension`,
-        suffix: availability.available ? "" : ` (${availability.reason})`,
       }
     }),
   ]
@@ -84,7 +81,7 @@ async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpen
     title: "选择恢复方式 / Select how to open this session",
     items: options,
     renderItem: (item, _index, isSelected) => {
-      return formatSelectableLabel(`${item.label}${item.suffix ?? ""}`, isSelected)
+      return formatSelectableLabel(item.label, isSelected)
     },
   })
 

@@ -46,6 +46,7 @@ const AGENT_IDE_EXTENSIONS: Record<AgentName, string> = {
 
 interface RunCommandOptions {
   stdio?: "inherit" | "ignore"
+  missingCommandMessage?: string
 }
 
 export interface IdeOpenAvailability {
@@ -218,8 +219,6 @@ export async function runCommand(
   cwd: string,
   options: RunCommandOptions = {},
 ): Promise<number> {
-  ensureCommandAvailable(command)
-
   return new Promise<number>((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -228,6 +227,12 @@ export async function runCommand(
     })
 
     child.on("error", (error) => {
+      const spawnError = error as NodeJS.ErrnoException
+      if (spawnError.code === "ENOENT") {
+        reject(new Error(options.missingCommandMessage ?? formatMissingCommandMessage(command)))
+        return
+      }
+
       reject(
         new Error(`启动命令失败: ${command} ${args.join(" ")}\n${String(error)}`),
       )
@@ -257,14 +262,15 @@ export async function openSessionInIde(
   sessionId: string,
   cwd: string,
 ): Promise<void> {
-  ensureIdeOpenAvailable(ide, agent)
-
   const command = getIdeCommand(ide)
   const uri = buildIdeSessionUri(ide, agent, sessionId)
   const revealExitCode = await runCommand(
     command,
     buildIdeWorkspaceOpenArgs(cwd),
     cwd,
+    {
+      missingCommandMessage: formatMissingIdeCommandMessage(ide),
+    },
   )
   if (revealExitCode !== 0) {
     throw new Error(`打开 ${getIdeLabel(ide)} 项目失败，退出码: ${revealExitCode}`)
@@ -273,7 +279,9 @@ export async function openSessionInIde(
   const warmupDelayMs = agent === "claude" ? 500 : 200
   await new Promise((resolve) => setTimeout(resolve, warmupDelayMs))
 
-  const openExitCode = await runCommand(command, ["--open-url", uri], cwd)
+  const openExitCode = await runCommand(command, ["--open-url", uri], cwd, {
+    missingCommandMessage: formatMissingIdeCommandMessage(ide),
+  })
   if (openExitCode !== 0) {
     throw new Error(`通过 ${getIdeLabel(ide)} 插件打开会话失败，退出码: ${openExitCode}`)
   }
