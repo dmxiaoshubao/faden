@@ -245,6 +245,31 @@ export function buildSelectorLines<T>(
   return lines.map((line) => truncateLine(line, maxWidth))
 }
 
+export function buildSelectorCleanupSequence(renderedLineCount: number): string {
+  if (renderedLineCount <= 0) {
+    return ""
+  }
+
+  return `\x1b[${renderedLineCount}A\x1b[J`
+}
+
+async function writeStdoutAndWait(output: string): Promise<void> {
+  if (!output || !process.stdout.isTTY) {
+    return
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(output, (error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve()
+    })
+  })
+}
+
 export async function selectItem<T>(
   options: SelectOptions<T>,
 ): Promise<T | null> {
@@ -262,6 +287,7 @@ export async function selectItem<T>(
   const { React, ink } = await loadInkRuntime()
   const { createElement, useEffect, useState } = React
   const { Text, render, useApp, useCursor, useInput, useWindowSize } = ink
+  let lastRenderedLineCount = 0
 
   const Selector = () => {
     const [selectedIndex, setSelectedIndex] = useState(0)
@@ -298,14 +324,17 @@ export async function selectItem<T>(
       }
     })
 
+    const lines = buildSelectorLines(
+      options,
+      selectedIndex,
+      Math.max(1, columns - 1),
+    )
+    lastRenderedLineCount = lines.length
+
     return createElement(
       Text,
       { wrap: "truncate-end" },
-      buildSelectorLines(
-        options,
-        selectedIndex,
-        Math.max(1, columns - 1),
-      ).join("\n"),
+      lines.join("\n"),
     )
   }
 
@@ -315,11 +344,13 @@ export async function selectItem<T>(
     stderr: process.stderr,
     exitOnCtrlC: false,
     patchConsole: false,
-    alternateScreen: true,
+    alternateScreen: false,
     incrementalRendering: true,
   })
 
   const result = await inkInstance.waitUntilExit()
+  const cleanupSequence = buildSelectorCleanupSequence(lastRenderedLineCount)
+  await writeStdoutAndWait(cleanupSequence)
   return result == null ? null : result as T
 }
 

@@ -12,6 +12,7 @@
 ## Features
 
 - Create `codex` or `claude` sessions
+- Resume historical sessions directly in an IDE
 - Filter sessions by current directory, explicit path, or all paths
 - Search by alias, native title, session ID, or working directory
 - Resume a session and switch back to the original working directory automatically
@@ -78,6 +79,8 @@ Alias binding details:
 faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 ```
 
+If you prefer continuing work inside your IDE, this flow lets you choose an IDE after selecting a session instead of forcing terminal resume first.
+
 - By default, only sessions under the current working directory are shown
 - `-a` / `--all` lists sessions across all directories
 - `-p` / `--path` limits results to a specific directory
@@ -88,21 +91,21 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 
 Resume behavior:
 
-- `Resume in terminal (default)`
-- `codex` uses `codex resume <sessionId>`
-- `claude` uses `claude --resume <sessionId>`
-- Terminal resume runs inside the session's original working directory
-- `Open in IDE extension`
+- `Open in IDE`
 - `codex` first opens the original project in the selected IDE, then uses `${scheme}://openai.chatgpt/local/<sessionId>` to jump into the matching session
 - `claude` first opens the original project in the selected IDE, then uses `${scheme}://anthropic.claude-code/open?session=<sessionId>` to open the session in an IDE extension tab
+- IDE opening requires both the IDE shell command and the matching official extension to be installed
 - Built-in URI schemes:
 - `VS Code` -> `vscode://`
 - `Cursor` -> `cursor://`
 - `Trae` -> `trae://`
 - `Windsurf` -> `windsurf://`
 - `Antigravity` -> `antigravity://`
-- IDE opening requires both the IDE shell command and the matching official extension to be installed
-- Arguments after `--` are only supported for terminal resume, not IDE extension opening
+- `Resume in terminal (default)`
+- `codex` uses `codex resume <sessionId> -C <session.cwd>` so it keeps the recorded working directory and skips Codex's cwd confirmation step
+- `claude` uses `claude --resume <sessionId>`
+- Terminal resume runs inside the session's original working directory
+- Arguments after `--` are only supported for terminal resume, not IDE opening
 
 ### Remove a session
 
@@ -138,12 +141,12 @@ faden alias clear [codex|claude] [-a] [-k key] [-p path]
 
 ### Session source paths
 
-| Source | macOS | Linux | Windows | Environment override | Files read by `faden` | Purpose |
-| --- | --- | --- | --- | --- | --- | --- |
-| Codex | `~/.codex` | `~/.codex` | `%USERPROFILE%\\.codex` | `CODEX_HOME` | `sessions/**/rollout-*.jsonl` | Reads session body, `sessionId`, `cwd`, timestamps, message counts, git branch, and related metadata |
-| Codex | `~/.codex` | `~/.codex` | `%USERPROFILE%\\.codex` | `CODEX_HOME` | `session_index.jsonl` | Reads indexed title and index timestamps for list rendering |
-| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/*.jsonl` | Reads session body, `sessionId`, `cwd`, timestamps, message counts, git branch, and related metadata |
-| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/sessions-index.json` | Reads indexed summary, first prompt, modified time, message count, project path, and related metadata |
+| Source | macOS                | Linux                | Windows                            | Environment override | Files read by `faden`            | Purpose                                                                                               |
+| ------ | -------------------- | -------------------- | ---------------------------------- | -------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Codex  | `~/.codex`           | `~/.codex`           | `%USERPROFILE%\\.codex`            | `CODEX_HOME`         | `sessions/**/rollout-*.jsonl`    | Reads session body, `sessionId`, `cwd`, timestamps, message counts, git branch, and related metadata  |
+| Codex  | `~/.codex`           | `~/.codex`           | `%USERPROFILE%\\.codex`            | `CODEX_HOME`         | `session_index.jsonl`            | Reads indexed title and index timestamps for list rendering                                           |
+| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR`  | `projects/*/*.jsonl`             | Reads session body, `sessionId`, `cwd`, timestamps, message counts, git branch, and related metadata  |
+| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR`  | `projects/*/sessions-index.json` | Reads indexed summary, first prompt, modified time, message count, project path, and related metadata |
 
 Notes:
 

@@ -5,6 +5,10 @@ import type { AgentName, AliasCommandOptions, IdeName, SessionRecord } from "./t
 
 type ResumeOpenMode = "terminal" | IdeName
 
+function hasCodexWorkingDirectoryOverride(args: string[]): boolean {
+  return args.includes("-C") || args.includes("--cd")
+}
+
 async function ensureDirectoryExists(targetPath: string): Promise<void> {
   const fs = await import("node:fs/promises")
   const stats = await fs.stat(targetPath).catch(() => null)
@@ -212,7 +216,14 @@ async function handleResume(
 
   const args =
     selected.agent === "codex"
-      ? ["resume", selected.sessionId, ...options.passthroughArgs]
+      ? [
+        "resume",
+        selected.sessionId,
+        ...(hasCodexWorkingDirectoryOverride(options.passthroughArgs)
+          ? []
+          : ["-C", selected.cwd]),
+        ...options.passthroughArgs,
+      ]
       : ["--resume", selected.sessionId, ...options.passthroughArgs]
 
   const command = selected.agent === "codex" ? "codex" : "claude"

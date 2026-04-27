@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import {
+  buildSelectorCleanupSequence,
   buildSelectorLines,
   formatSelectorInstructions,
   formatSelectorStatus,
@@ -83,4 +84,9 @@ test("buildSelectorLines renders a 7-item centered window with footer status", (
   assert.doesNotMatch(output, /item-02/)
   assert.doesNotMatch(output, /item-10/)
   assert.match(output, /显示 3-9 \/ 10 项/)
+})
+
+test("buildSelectorCleanupSequence clears the selector block from the primary screen", () => {
+  assert.equal(buildSelectorCleanupSequence(0), "")
+  assert.equal(buildSelectorCleanupSequence(6), "\x1b[6A\x1b[J")
 })

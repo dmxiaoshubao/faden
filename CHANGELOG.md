@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - 2026-04-27
+
+- Updated `codex` terminal resume to pass `-C <session.cwd>` automatically, so Codex resumes with the recorded working directory and skips the extra cwd confirmation step.
+
+### 中文版
+
+- 调整 `codex` 的终端恢复参数，默认自动补上 `-C <session.cwd>`，让 Codex 直接沿用会话记录的工作目录，并跳过额外的 cwd 二次确认步骤。
+
 ## 0.2.0 - 2026-04-23
 
 - Added built-in IDE presets for `VS Code`, `Cursor`, `Trae`, `Windsurf`, and `Antigravity`, so `resume` can open Codex or Claude sessions in supported VS Code forks.

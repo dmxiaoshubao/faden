@@ -253,7 +253,23 @@ export async function runInteractiveCommand(
   args: string[],
   cwd: string,
 ): Promise<number> {
+  detachParentTerminalInput()
   return runCommand(command, args, cwd, { stdio: "inherit" })
+}
+
+function detachParentTerminalInput(): void {
+  if (!process.stdin.isTTY) {
+    return
+  }
+
+  if (typeof process.stdin.setRawMode === "function") {
+    process.stdin.setRawMode(false)
+  }
+
+  process.stdin.pause()
+  process.stdin.removeAllListeners("data")
+  process.stdin.removeAllListeners("readable")
+  process.stdin.removeAllListeners("keypress")
 }
 
 export async function openSessionInIde(

@@ -2,7 +2,7 @@
 
 `faden` 是一个面向 `codex` 和 `claude` 的本地会话管理命令行工具，支持在 Windows、macOS 和 Linux 上统一完成会话新建、恢复、删除和别名绑定。
 
-英文说明见 `docs/README.en.md`。
+英文说明见 [docs/README.en.md](./docs/README.en.md)。
 
 ## 适用场景
 
@@ -14,6 +14,7 @@
 ## 功能概览
 
 - 支持新建 `codex` / `claude` 会话
+- 支持在 IDE 中直接恢复历史会话
 - 支持按当前目录、指定目录或全部目录筛选会话
 - 支持按别名、原生标题、会话 ID 和工作目录做模糊搜索
 - 支持恢复会话并自动切换到原工作目录
@@ -80,6 +81,8 @@ faden add claude -n 继续实现 -- --permission-mode plan
 faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 ```
 
+如果你更习惯在 IDE 里继续工作，这个命令在选中会话后，可以直接选择用 IDE 打开，而不是只能回到终端。
+
 - 默认仅列出当前工作目录下的会话
 - `-a` / `--all` 用于列出所有目录的会话
 - `-p` / `--path` 用于只查看指定目录下的会话
@@ -90,21 +93,21 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 
 恢复方式：
 
-- `终端恢复（默认）`
-- `codex` 使用 `codex resume <sessionId>`
-- `claude` 使用 `claude --resume <sessionId>`
-- 终端恢复前会先切换到会话原始工作目录
-- `IDE 插件打开`
+- `IDE 打开`
 - `codex` 会先用所选 IDE 打开会话原始项目，再通过 `${scheme}://openai.chatgpt/local/<sessionId>` 进入对应会话
 - `claude` 会先用所选 IDE 打开会话原始项目，再通过 `${scheme}://anthropic.claude-code/open?session=<sessionId>` 在插件标签页中打开对应会话
-- 当前内置 URI scheme：
-  - `VS Code` -> `vscode://`
-  - `Cursor` -> `cursor://`
-  - `Trae` -> `trae://`
-  - `Windsurf` -> `windsurf://`
-  - `Antigravity` -> `antigravity://`
 - IDE 打开依赖对应 shell 命令和对应官方插件都已安装
-- `-- <agent args...>` 仅在“终端恢复”模式下生效，IDE 插件打开不支持透传参数
+  当前内置 URI scheme：
+- `VS Code` -> `vscode://`
+- `Cursor` -> `cursor://`
+- `Trae` -> `trae://`
+- `Windsurf` -> `windsurf://`
+- `Antigravity` -> `antigravity://`
+- `终端恢复（默认）`
+- `codex` 使用 `codex resume <sessionId> -C <session.cwd>`，默认沿用会话记录的工作目录并跳过 Codex 的 cwd 二次确认
+- `claude` 使用 `claude --resume <sessionId>`
+- 终端恢复前会先切换到会话原始工作目录
+- `-- <agent args...>` 仅在“终端恢复”模式下生效，IDE 打开不支持透传参数
 
 ### 删除会话
 
@@ -140,12 +143,12 @@ faden alias clear [codex|claude] [-a] [-k key] [-p path]
 
 ### 历史会话来源路径
 
-| 来源 | macOS | Linux | Windows | 可覆盖环境变量 | 实际读取的文件 | 用途 |
-| --- | --- | --- | --- | --- | --- | --- |
-| Codex | `~/.codex` | `~/.codex` | `%USERPROFILE%\\.codex` | `CODEX_HOME` | `sessions/**/rollout-*.jsonl` | 读取会话正文、`sessionId`、`cwd`、时间、消息数、分支等信息 |
-| Codex | `~/.codex` | `~/.codex` | `%USERPROFILE%\\.codex` | `CODEX_HOME` | `session_index.jsonl` | 读取索引标题和索引时间，用于补全会话列表展示 |
-| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/*.jsonl` | 读取会话正文、`sessionId`、`cwd`、时间、消息数、分支等信息 |
-| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/sessions-index.json` | 读取索引摘要、首条提示、修改时间、消息数、项目路径等信息 |
+| 来源   | macOS                | Linux                | Windows                            | 可覆盖环境变量      | 实际读取的文件                   | 用途                                                       |
+| ------ | -------------------- | -------------------- | ---------------------------------- | ------------------- | -------------------------------- | ---------------------------------------------------------- |
+| Codex  | `~/.codex`           | `~/.codex`           | `%USERPROFILE%\\.codex`            | `CODEX_HOME`        | `sessions/**/rollout-*.jsonl`    | 读取会话正文、`sessionId`、`cwd`、时间、消息数、分支等信息 |
+| Codex  | `~/.codex`           | `~/.codex`           | `%USERPROFILE%\\.codex`            | `CODEX_HOME`        | `session_index.jsonl`            | 读取索引标题和索引时间，用于补全会话列表展示               |
+| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/*.jsonl`             | 读取会话正文、`sessionId`、`cwd`、时间、消息数、分支等信息 |
+| Claude | `~/.claude/projects` | `~/.claude/projects` | `%USERPROFILE%\\.claude\\projects` | `CLAUDE_CONFIG_DIR` | `projects/*/sessions-index.json` | 读取索引摘要、首条提示、修改时间、消息数、项目路径等信息   |
 
 说明：
 
