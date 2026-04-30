@@ -221,12 +221,12 @@ async function handleResume(
     if (options.passthroughArgs.length > 0) {
       throw new Error("Codex App 打开暂不支持透传参数，请改用终端恢复。")
     }
-    const { prepareCodexAppSession, openCodexAppSession } = await import("./codex-app")
+    const { prepareCodexAppSession, openCodexAppSession, isCodexAppRunning } = await import("./codex-app")
     const prepared = await prepareCodexAppSession(selected, { confirmQuit: confirmAction })
     if (prepared.cancelled) {
       return 1
     }
-    await openCodexAppSession(selected.sessionId)
+    await openCodexAppSession(selected.sessionId, { skipAppLaunch: prepared.listed && isCodexAppRunning() })
     return 0
   }
 

@@ -10,6 +10,7 @@ import {
   getCodexThreadRecord,
   getCurrentCodexModelProvider,
   isCodexAppInstalled,
+  isCodexAppListedThread,
   isCodexAppReadyThread,
   openCodexAppSession,
   prepareCodexAppSession,
@@ -139,6 +140,7 @@ test("thread helpers read and update sqlite state", async () => {
     modelProvider: "old",
     updatedAt: 10,
     updatedAtMs: 10000,
+    archived: 0,
   })
 
   updateThreadForCodexApp("session-old", "current", new Date(123_456), dbPath)
@@ -149,6 +151,7 @@ test("thread helpers read and update sqlite state", async () => {
     modelProvider: "current",
     updatedAt: 123,
     updatedAtMs: 123456,
+    archived: 0,
   })
 })
 
@@ -168,7 +171,52 @@ test("isCodexAppReadyThread detects ready rollout and sqlite state", async () =>
     modelProvider: "current",
     updatedAt: 20,
     updatedAtMs: 20000,
+    archived: 0,
   }), true)
+})
+
+
+test("isCodexAppListedThread detects sessions already present in Codex App list", async () => {
+  const dir = await makeTempDir()
+  const rolloutPath = path.join(dir, "rollout.jsonl")
+  await createRollout(rolloutPath)
+
+  assert.equal(isCodexAppListedThread({
+    id: "session-ready",
+    rolloutPath,
+    source: "cli",
+    modelProvider: "current",
+    updatedAt: 20,
+    updatedAtMs: 20000,
+    archived: 0,
+  }), true)
+  assert.equal(isCodexAppListedThread({
+    id: "session-vscode",
+    rolloutPath,
+    source: "vscode",
+    modelProvider: "current",
+    updatedAt: 20,
+    updatedAtMs: 20000,
+    archived: 0,
+  }), true)
+  assert.equal(isCodexAppListedThread({
+    id: "session-exec",
+    rolloutPath,
+    source: "exec",
+    modelProvider: "current",
+    updatedAt: 20,
+    updatedAtMs: 20000,
+    archived: 0,
+  }), false)
+  assert.equal(isCodexAppListedThread({
+    id: "session-archived",
+    rolloutPath,
+    source: "cli",
+    modelProvider: "current",
+    updatedAt: 20,
+    updatedAtMs: 20000,
+    archived: 1,
+  }), false)
 })
 
 test("prepareCodexAppSession fails when Codex App is missing", async () => {
@@ -221,7 +269,7 @@ test("prepareCodexAppSession returns cancelled when migration needs running app 
   assert.match(confirmMessage, /To avoid Codex App overwriting local changes,/)
   assert.match(confirmMessage, /please close Codex App first\./)
   assert.equal(confirmLabel, "关闭 Codex App 并继续 / Close Codex App and continue")
-  assert.deepEqual(result, { migrated: false, cancelled: true, modelProvider: "current" })
+  assert.deepEqual(result, { migrated: false, cancelled: true, modelProvider: "current", listed: false })
   assert.equal(getCodexThreadRecord("session-old", dbPath)?.source, "exec")
 })
 
@@ -265,7 +313,7 @@ test("prepareCodexAppSession quits running app when confirmed and migrates", asy
     confirmQuit: async () => true,
   })
 
-  assert.deepEqual(result, { migrated: true, cancelled: false, modelProvider: "current" })
+  assert.deepEqual(result, { migrated: true, cancelled: false, modelProvider: "current", listed: false })
   assert.equal(calls.some((call) => call.startsWith("osascript ")), true)
   assert.equal(getCodexThreadRecord("session-old", dbPath)?.source, "cli")
   assert.equal(getCodexThreadRecord("session-old", dbPath)?.modelProvider, "current")
@@ -310,7 +358,45 @@ test("prepareCodexAppSession does not quit app or write when session is ready", 
     },
   })
 
-  assert.deepEqual(result, { migrated: false, cancelled: false, modelProvider: "current" })
+  assert.deepEqual(result, { migrated: false, cancelled: false, modelProvider: "current", listed: true })
+  assert.equal(quitCalled, false)
+})
+
+
+test("prepareCodexAppSession opens listed session without quit confirmation", async () => {
+  const dir = await makeTempDir()
+  const rolloutPath = path.join(dir, "rollout.jsonl")
+  const dbPath = path.join(dir, "state.sqlite")
+  const configPath = path.join(dir, "config.toml")
+  let quitCalled = false
+  await createRollout(rolloutPath)
+  await createStateDb(dbPath, rolloutPath)
+  await fs.writeFile(configPath, "model_provider = \"current\"\n", "utf8")
+
+  const result = await prepareCodexAppSession(codexSession("session-ready"), {
+    platform: "darwin",
+    dbPath,
+    configPath,
+    codexAppPath: dir,
+    runCommand: (command, args, input) => {
+      if (command === "osascript") quitCalled = true
+      if (command === "pgrep") return { status: 0 }
+      if (command === "sqlite3") {
+        const sqlite = spawnSync("sqlite3", args, {
+          encoding: "utf8",
+          input,
+          stdio: ["pipe", "pipe", "pipe"],
+        })
+        return { status: sqlite.status, stdout: sqlite.stdout, stderr: sqlite.stderr }
+      }
+      return { status: 0 }
+    },
+    confirmQuit: async () => {
+      throw new Error("should not confirm")
+    },
+  })
+
+  assert.deepEqual(result, { migrated: false, cancelled: false, modelProvider: "current", listed: true })
   assert.equal(quitCalled, false)
 })
 
@@ -333,4 +419,23 @@ test("openCodexAppSession opens app, waits 3000ms, then opens deeplink", async (
     "open codex://threads/session-1",
   ])
   assert.deepEqual(waits, [3000])
+})
+
+test("openCodexAppSession opens running listed session deeplink without app launch delay", async () => {
+  const calls: string[] = []
+  const waits: number[] = []
+  await openCodexAppSession("session-1", {
+    platform: "darwin",
+    skipAppLaunch: true,
+    runCommand: (command, args) => {
+      calls.push(`${command} ${args.join(" ")}`)
+      return { status: 0 }
+    },
+    sleep: async (ms) => {
+      waits.push(ms)
+    },
+  })
+
+  assert.deepEqual(calls, ["open codex://threads/session-1"])
+  assert.deepEqual(waits, [])
 })

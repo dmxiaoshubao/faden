@@ -107,10 +107,10 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `Antigravity` -> `antigravity://`
 - `Codex App 恢复`（仅 macOS 上的 Codex 会话）
 - 会先检测 Codex App 是否存在；未安装时会提示改用终端或 IDE 恢复
-- 若会话已能被 Codex App 识别，会直接打开 App 并跳转到对应会话
+- 若会话已存在于 Codex App 可见列表中（例如 App 直接创建或 IDE 来源的 Codex 会话），会跳过本地状态迁移；如果 App 已运行则直接跳转，如果未运行则先打开 App、等待 3 秒后再跳转
 - 若旧会话需要修正本地状态，会先备份 `~/.codex/state_5.sqlite` 和 rollout JSONL，再同步 `source`、`model_provider` 与 `session_meta`
 - 若迁移时 Codex App 正在运行，会提示确认是否由 faden 先关闭 App，避免 App 回写覆盖本地状态
-- 打开顺序为 `open -a "Codex"`，等待 3 秒，再触发 `codex://threads/<sessionId>`
+- 对需要启动 App 的场景，打开顺序为 `open -a "Codex"`，等待 3 秒，再触发 `codex://threads/<sessionId>`
 - `终端恢复（默认）`
 - `codex` 使用 `codex resume <sessionId> -C <session.cwd>`，默认沿用会话记录的工作目录并跳过 Codex 的 cwd 二次确认
 - `claude` 使用 `claude --resume <sessionId>`

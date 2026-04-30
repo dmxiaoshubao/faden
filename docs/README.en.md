@@ -105,10 +105,10 @@ Resume behavior:
 - `Antigravity` -> `antigravity://`
 - `Resume in Codex App` for Codex sessions on macOS
 - Checks whether Codex App is installed; if not, faden asks you to use terminal or IDE resume instead
-- If the session is already visible to Codex App, faden opens the App and jumps directly to that thread
+- If the session is already visible in Codex App, including App-created or IDE-originated Codex sessions, faden skips local state repair; when the App is already running it opens the deep link directly, otherwise it launches the App, waits 3 seconds, and then opens the deep link
 - If an older session needs local state repair, faden backs up `~/.codex/state_5.sqlite` and the rollout JSONL before syncing `source`, `model_provider`, and `session_meta`
 - If Codex App is running while migration is needed, faden asks whether it should close the App first to avoid local state being overwritten
-- The open sequence is `open -a "Codex"`, wait 3 seconds, then open `codex://threads/<sessionId>`
+- When App launch is needed, the open sequence is `open -a "Codex"`, wait 3 seconds, then open `codex://threads/<sessionId>`
 - `Resume in terminal (default)`
 - `codex` uses `codex resume <sessionId> -C <session.cwd>` so it keeps the recorded working directory and skips Codex's cwd confirmation step
 - `claude` uses `claude --resume <sessionId>`

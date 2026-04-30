@@ -7,6 +7,7 @@ import { getCodexHome } from "./parsers/codex"
 import type { SessionRecord } from "./types"
 
 const CODEX_APP_SOURCE = "cli"
+const CODEX_APP_IDE_SOURCE = "vscode"
 const CODEX_APP_ORIGINATOR = "codex_cli_rs"
 const DEFAULT_DEEPLINK_DELAY_MS = 3_000
 const DEFAULT_QUIT_TIMEOUT_MS = 10_000
@@ -18,6 +19,7 @@ export interface CodexThreadRecord {
   modelProvider: string
   updatedAt: number
   updatedAtMs: number | null
+  archived: number | null
 }
 
 interface CommandRunnerResult {
@@ -43,12 +45,14 @@ export interface CodexAppOptions {
 
 export interface OpenCodexAppSessionOptions extends CodexAppOptions {
   deeplinkDelayMs?: number
+  skipAppLaunch?: boolean
 }
 
 export interface PrepareCodexAppSessionResult {
   migrated: boolean
   cancelled: boolean
   modelProvider: string
+  listed: boolean
 }
 
 interface RolloutSessionMeta {
@@ -199,14 +203,14 @@ export function getCodexThreadRecord(
 ): CodexThreadRecord | null {
   const output = runSqlite(dbPath, [
     ".mode tabs",
-    `select id, rollout_path, source, model_provider, updated_at, updated_at_ms from threads where id = ${quoteSqlString(sessionId)};`,
+    `select id, rollout_path, source, model_provider, updated_at, updated_at_ms, archived from threads where id = ${quoteSqlString(sessionId)};`,
   ].join("\n"), getRunner(options)).trim()
 
   if (!output) {
     return null
   }
 
-  const [id, rolloutPath, source, modelProvider, updatedAt, updatedAtMs] = output.split("\t")
+  const [id, rolloutPath, source, modelProvider, updatedAt, updatedAtMs, archived] = output.split("\t")
   if (!id || !rolloutPath || !source || !modelProvider || !updatedAt) {
     throw new Error(`Codex 线程记录格式异常: ${sessionId}`)
   }
@@ -218,13 +222,19 @@ export function getCodexThreadRecord(
     modelProvider,
     updatedAt: Number(updatedAt),
     updatedAtMs: updatedAtMs ? Number(updatedAtMs) : null,
+    archived: archived ? Number(archived) : null,
   }
+}
+
+export function isCodexAppListedThread(record: CodexThreadRecord): boolean {
+  return (record.source === CODEX_APP_SOURCE || record.source === CODEX_APP_IDE_SOURCE) &&
+    record.archived !== 1
 }
 
 export async function isCodexAppReadyThread(
   record: CodexThreadRecord,
 ): Promise<boolean> {
-  if (record.source !== CODEX_APP_SOURCE) {
+  if (!isCodexAppListedThread(record)) {
     return false
   }
 
@@ -310,8 +320,8 @@ export async function prepareCodexAppSession(
     throw new Error(`未找到 Codex 会话索引: ${session.sessionId}`)
   }
 
-  if (await isCodexAppReadyThread(record)) {
-    return { migrated: false, cancelled: false, modelProvider: record.modelProvider }
+  if (isCodexAppListedThread(record)) {
+    return { migrated: false, cancelled: false, modelProvider: record.modelProvider, listed: true }
   }
 
   const modelProvider = await resolveCodexAppModelProvider(record, options)
@@ -331,7 +341,7 @@ export async function prepareCodexAppSession(
       cancelLabel: "取消 / Cancel",
     }) : false
     if (!confirmed) {
-      return { migrated: false, cancelled: true, modelProvider }
+      return { migrated: false, cancelled: true, modelProvider, listed: false }
     }
     await quitCodexApp(options)
   }
@@ -339,7 +349,7 @@ export async function prepareCodexAppSession(
   await backupCodexAppMigrationTarget(record, dbPath, options)
   await updateRolloutForCodexApp(record.rolloutPath, modelProvider)
   updateThreadForCodexApp(session.sessionId, modelProvider, options.now ?? new Date(), dbPath, options)
-  return { migrated: true, cancelled: false, modelProvider }
+  return { migrated: true, cancelled: false, modelProvider, listed: false }
 }
 
 export async function openCodexAppSession(
@@ -351,12 +361,14 @@ export async function openCodexAppSession(
   }
 
   const runCommand = getRunner(options)
-  const openApp = runCommand("open", ["-a", "Codex"])
-  if (openApp.status !== 0) {
-    throw new Error(openApp.stderr?.trim() || "打开 Codex App 失败。")
-  }
+  if (!options.skipAppLaunch) {
+    const openApp = runCommand("open", ["-a", "Codex"])
+    if (openApp.status !== 0) {
+      throw new Error(openApp.stderr?.trim() || "打开 Codex App 失败。")
+    }
 
-  await (options.sleep ?? defaultSleep)(options.deeplinkDelayMs ?? DEFAULT_DEEPLINK_DELAY_MS)
+    await (options.sleep ?? defaultSleep)(options.deeplinkDelayMs ?? DEFAULT_DEEPLINK_DELAY_MS)
+  }
 
   const openThread = runCommand("open", [buildCodexAppSessionUri(sessionId)])
   if (openThread.status !== 0) {

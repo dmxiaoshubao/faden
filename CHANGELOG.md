@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 - 2026-04-30
+
+- Fixed Codex App resume detection for App-created and IDE-originated Codex sessions whose thread source is `vscode`.
+- Changed Codex App deep link opening so already visible sessions skip the 3-second App launch delay only when Codex App is already running.
+
+### 中文版
+
+- 修复 Codex App 恢复对 App 直接创建、IDE 来源会话的识别，这类会话在本地 thread 中可能是 `source = vscode`。
+- 调整 Codex App deep link 打开流程：已在列表中的会话仅在 Codex App 已运行时直接跳转；未运行时仍会先打开 App、等待 3 秒后再跳转。
+
 ## 0.3.0 - 2026-04-30
 
 - Added a macOS-only Codex App resume option for Codex sessions after selecting a session in `faden resume`.
