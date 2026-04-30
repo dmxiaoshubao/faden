@@ -218,7 +218,8 @@ export function buildSelectorLines<T>(
   maxWidth: number,
 ): string[] {
   const lines = [
-    options.title,
+    ...options.title.split(/\r?\n/u),
+    "",
     ...formatSelectorInstructions(),
     "",
   ]
@@ -354,7 +355,15 @@ export async function selectItem<T>(
   return result == null ? null : result as T
 }
 
-export async function confirmAction(message: string): Promise<boolean> {
+export interface ConfirmActionOptions {
+  confirmLabel?: string
+  cancelLabel?: string
+}
+
+export async function confirmAction(
+  message: string,
+  options: ConfirmActionOptions = {},
+): Promise<boolean> {
   const { formatSelectableLabel } = await import("./render")
 
   const result = await selectItem({
@@ -362,8 +371,8 @@ export async function confirmAction(message: string): Promise<boolean> {
     items: [true, false],
     renderItem: (item, _index, selected) => {
       const label = item
-        ? "确认删除 / Confirm delete"
-        : "取消 / Cancel"
+        ? options.confirmLabel ?? "确认删除 / Confirm delete"
+        : options.cancelLabel ?? "取消 / Cancel"
       return formatSelectableLabel(label, selected)
     },
   })

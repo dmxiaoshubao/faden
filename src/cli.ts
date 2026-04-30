@@ -3,7 +3,7 @@ import { parseCliArgs } from "./args"
 import { printHelp } from "./help"
 import type { AgentName, AliasCommandOptions, IdeName, SessionRecord } from "./types"
 
-type ResumeOpenMode = "terminal" | IdeName
+type ResumeOpenMode = "terminal" | "codex-app" | IdeName
 
 function hasCodexWorkingDirectoryOverride(args: string[]): boolean {
   return args.includes("-C") || args.includes("--cd")
@@ -64,11 +64,21 @@ async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpen
     import("./child-process"),
   ])
 
-  const options = [
+  const options: Array<{ value: ResumeOpenMode, label: string }> = [
     {
-      value: "terminal" as const,
+      value: "terminal",
       label: "终端恢复（默认） / Resume in terminal (default)",
     },
+  ]
+
+  if (selected.agent === "codex" && process.platform === "darwin") {
+    options.push({
+      value: "codex-app",
+      label: "Codex App 恢复 / Resume in Codex App",
+    })
+  }
+
+  options.push(
     ...getSupportedIdeNames().map((ide) => {
       const ideLabel = getIdeLabel(ide)
       return {
@@ -79,7 +89,7 @@ async function chooseResumeOpenMode(selected: SessionRecord): Promise<ResumeOpen
             : `${ideLabel} 插件打开 / Open in ${ideLabel} extension`,
       }
     }),
-  ]
+  )
 
   const result = await selectItem({
     title: "选择恢复方式 / Select how to open this session",
@@ -174,12 +184,13 @@ async function handleAdd(
 async function handleResume(
   options: import("./types").ResumeCommandOptions,
 ): Promise<number> {
-  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { openSessionInIde, runInteractiveCommand }] =
+  const [{ resolveInputPath }, { filterSessions, loadAllSessions }, { loadState }, { openSessionInIde, runInteractiveCommand }, { confirmAction }] =
     await Promise.all([
       import("./path-utils"),
       import("./sessions"),
       import("./state"),
       import("./child-process"),
+      import("./ui"),
     ])
 
   const state = await loadState()
@@ -204,6 +215,19 @@ async function handleResume(
   const openMode = await chooseResumeOpenMode(selected)
   if (!openMode) {
     return 1
+  }
+
+  if (openMode === "codex-app") {
+    if (options.passthroughArgs.length > 0) {
+      throw new Error("Codex App 打开暂不支持透传参数，请改用终端恢复。")
+    }
+    const { prepareCodexAppSession, openCodexAppSession } = await import("./codex-app")
+    const prepared = await prepareCodexAppSession(selected, { confirmQuit: confirmAction })
+    if (prepared.cancelled) {
+      return 1
+    }
+    await openCodexAppSession(selected.sessionId)
+    return 0
   }
 
   if (openMode !== "terminal") {

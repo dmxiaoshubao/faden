@@ -86,6 +86,20 @@ test("buildSelectorLines renders a 7-item centered window with footer status", (
   assert.match(output, /显示 3-9 \/ 10 项/)
 })
 
+
+test("buildSelectorLines preserves multiline title before instructions", () => {
+  const lines = buildSelectorLines({
+    title: "第一行\n第二行",
+    items: ["确认"],
+    renderItem: (item) => item,
+  }, 0, 120)
+
+  assert.equal(stripAnsi(lines[0]), "第一行")
+  assert.equal(stripAnsi(lines[1]), "第二行")
+  assert.equal(stripAnsi(lines[2]), "")
+  assert.match(stripAnsi(lines[3]), /使用 上下键/)
+})
+
 test("buildSelectorCleanupSequence clears the selector block from the primary screen", () => {
   assert.equal(buildSelectorCleanupSequence(0), "")
   assert.equal(buildSelectorCleanupSequence(6), "\x1b[6A\x1b[J")

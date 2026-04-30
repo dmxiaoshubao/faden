@@ -18,6 +18,7 @@
     "dist/args.js",
     "dist/child-process.js",
     "dist/cli.js",
+    "dist/codex-app.js",
     "dist/fs-utils.js",
     "dist/help.js",
     "dist/path-utils.js",

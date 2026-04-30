@@ -52,8 +52,10 @@ function formatResumeHelp(): string {
   -- <agent args...>   透传给 codex resume / claude --resume，仅终端恢复可用 / Pass through to codex resume or claude --resume, only for terminal resume
 
 说明 / Notes:
-  选中会话后会再次选择恢复方式：终端恢复（默认）或在支持的 IDE 插件中打开（VS Code / Cursor / Trae / Windsurf / Antigravity）
-  After picking a session, choose whether to resume in terminal (default) or open it in a supported IDE extension
+  选中会话后会再次选择恢复方式：终端恢复（默认）、在支持的 IDE 插件中打开，或在 macOS 上用 Codex App 恢复 Codex 会话
+  After picking a session, choose terminal resume (default), a supported IDE extension, or Codex App for Codex sessions on macOS
+  Codex App 恢复会在必要时准备本地 Codex 状态；若需要迁移且 App 正在运行，会提示确认是否先关闭 App
+  Codex App resume prepares local Codex state when needed; if migration requires closing a running App, faden asks for confirmation first
 `
 }
 
