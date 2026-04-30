@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 - 2026-04-30
+
+- Added a macOS-only Codex App resume option for Codex sessions after selecting a session in `faden resume`.
+- Added Codex App local state preparation for legacy Codex sessions, including dynamic `model_provider` resolution, safe SQLite/rollout backup, App-ready detection, and a 3-second delayed deep link open.
+- Improved interactive confirmation prompts with custom labels and multiline titles so Codex App migration prompts render clearly.
+
+### 中文版
+
+- 在 `faden resume` 选中 Codex 会话后，新增 macOS 专属的 Codex App 恢复选项。
+- 新增 Codex App 本地状态准备流程：动态解析 `model_provider`、安全备份 SQLite/rollout、识别已可直接打开的会话，并固定使用 App 启动后等待 3 秒再触发 deep link。
+- 优化交互确认提示，支持自定义按钮文案和多行标题展示，让 Codex App 迁移提示完整清晰。
+
 ## 0.2.1 - 2026-04-27
 
 - Updated `codex` terminal resume to pass `-C <session.cwd>` automatically, so Codex resumes with the recorded working directory and skips the extra cwd confirmation step.

@@ -13,6 +13,7 @@
 
 - Create `codex` or `claude` sessions
 - Resume historical sessions directly in an IDE
+- Resume Codex sessions in Codex App on macOS
 - Filter sessions by current directory, explicit path, or all paths
 - Search by alias, native title, session ID, or working directory
 - Resume a session and switch back to the original working directory automatically
@@ -79,7 +80,7 @@ Alias binding details:
 faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 ```
 
-If you prefer continuing work inside your IDE, this flow lets you choose an IDE after selecting a session instead of forcing terminal resume first.
+If you prefer continuing work inside your IDE or Codex App, this flow lets you choose an open mode after selecting a session instead of forcing terminal resume first.
 
 - By default, only sessions under the current working directory are shown
 - `-a` / `--all` lists sessions across all directories
@@ -87,6 +88,7 @@ If you prefer continuing work inside your IDE, this flow lets you choose an IDE 
 - `-k` / `--key` filters by alias, title, session ID, or directory
 - Interactive controls: arrow keys to move, `Enter` to confirm, `q` or `Ctrl+C` to cancel
 - After selecting a session, `faden` asks how to open it
+- Codex sessions on macOS can choose `Resume in Codex App`
 - Built-in IDE presets: `VS Code`, `Cursor`, `Trae`, `Windsurf`, and `Antigravity`
 
 Resume behavior:
@@ -101,6 +103,12 @@ Resume behavior:
 - `Trae` -> `trae://`
 - `Windsurf` -> `windsurf://`
 - `Antigravity` -> `antigravity://`
+- `Resume in Codex App` for Codex sessions on macOS
+- Checks whether Codex App is installed; if not, faden asks you to use terminal or IDE resume instead
+- If the session is already visible to Codex App, faden opens the App and jumps directly to that thread
+- If an older session needs local state repair, faden backs up `~/.codex/state_5.sqlite` and the rollout JSONL before syncing `source`, `model_provider`, and `session_meta`
+- If Codex App is running while migration is needed, faden asks whether it should close the App first to avoid local state being overwritten
+- The open sequence is `open -a "Codex"`, wait 3 seconds, then open `codex://threads/<sessionId>`
 - `Resume in terminal (default)`
 - `codex` uses `codex resume <sessionId> -C <session.cwd>` so it keeps the recorded working directory and skips Codex's cwd confirmation step
 - `claude` uses `claude --resume <sessionId>`

@@ -15,6 +15,7 @@
 
 - 支持新建 `codex` / `claude` 会话
 - 支持在 IDE 中直接恢复历史会话
+- 支持在 macOS 上将 Codex 会话恢复到 Codex App
 - 支持按当前目录、指定目录或全部目录筛选会话
 - 支持按别名、原生标题、会话 ID 和工作目录做模糊搜索
 - 支持恢复会话并自动切换到原工作目录
@@ -81,7 +82,7 @@ faden add claude -n 继续实现 -- --permission-mode plan
 faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 ```
 
-如果你更习惯在 IDE 里继续工作，这个命令在选中会话后，可以直接选择用 IDE 打开，而不是只能回到终端。
+如果你更习惯在 IDE 或 Codex App 里继续工作，这个命令在选中会话后，可以直接选择打开方式，而不是只能回到终端。
 
 - 默认仅列出当前工作目录下的会话
 - `-a` / `--all` 用于列出所有目录的会话
@@ -89,6 +90,7 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `-k` / `--key` 用于按别名、标题、会话 ID 或目录做模糊过滤
 - 交互操作支持上下方向键选择，按 `Enter` 确认，按 `q` 或 `Ctrl+C` 取消
 - 选中会话后会再次选择打开方式，默认是终端恢复
+- macOS 上的 Codex 会话可选择 `Codex App 恢复`
 - 当前支持的 IDE 预设：`VS Code`、`Cursor`、`Trae`、`Windsurf`、`Antigravity`
 
 恢复方式：
@@ -103,6 +105,12 @@ faden resume [codex|claude] [-a] [-k key] [-p path] [-- <agent args...>]
 - `Trae` -> `trae://`
 - `Windsurf` -> `windsurf://`
 - `Antigravity` -> `antigravity://`
+- `Codex App 恢复`（仅 macOS 上的 Codex 会话）
+- 会先检测 Codex App 是否存在；未安装时会提示改用终端或 IDE 恢复
+- 若会话已能被 Codex App 识别，会直接打开 App 并跳转到对应会话
+- 若旧会话需要修正本地状态，会先备份 `~/.codex/state_5.sqlite` 和 rollout JSONL，再同步 `source`、`model_provider` 与 `session_meta`
+- 若迁移时 Codex App 正在运行，会提示确认是否由 faden 先关闭 App，避免 App 回写覆盖本地状态
+- 打开顺序为 `open -a "Codex"`，等待 3 秒，再触发 `codex://threads/<sessionId>`
 - `终端恢复（默认）`
 - `codex` 使用 `codex resume <sessionId> -C <session.cwd>`，默认沿用会话记录的工作目录并跳过 Codex 的 cwd 二次确认
 - `claude` 使用 `claude --resume <sessionId>`
